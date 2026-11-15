@@ -110,7 +110,8 @@
     }
 
     .task-input {
-      width: 100%;
+      flex: 1 1 200px;
+      width: auto;
       min-width: 0;
       height: 46px;
       padding: 0 14px;
@@ -121,6 +122,39 @@
       color: var(--ink);
       font: inherit;
       transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    #task-form { flex-wrap: wrap; }
+
+    .task-options {
+      flex: 0 0 100%;
+      display: grid;
+      width: 100%;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .task-options label, .board-controls label {
+      display: grid;
+      min-width: 0;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .task-options input, .task-options select, .board-controls input, .board-controls select,
+    .edit-dialog input, .edit-dialog select {
+      width: 100%;
+      min-width: 0;
+      height: 38px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--page);
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
     }
 
     .task-input::placeholder { color: var(--muted); opacity: .8; }
@@ -164,6 +198,28 @@
       letter-spacing: .1em;
       text-transform: uppercase;
     }
+
+    .board-controls {
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .board-controls form { padding: 0; border: 0; }
+
+    .board-create-row, .board-select-row {
+      display: flex;
+      align-items: end;
+      gap: 8px;
+    }
+
+    .board-create-row label { flex: 1; }
+    .board-create-row .sync-button { flex: 0 0 auto; }
+    .board-select-row label { flex: 1; }
+    .board-controls .sync-button { min-height: 38px; }
+    .reminder-status { margin: 0; color: var(--muted); font-size: 11px; }
+    .reminder-status.alert { color: var(--accent-dark); font-weight: 600; }
 
     .task-count {
       padding: 3px 8px;
@@ -301,6 +357,11 @@
     }
 
     .task-row.completed .task-text { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+    .task-content { flex: 1; min-width: 0; padding: 10px 0; }
+    .task-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .task-meta span { white-space: nowrap; }
+    .task-meta .overdue { color: var(--danger); font-weight: 650; }
 
     .task-edit-input {
       flex: 1;
@@ -477,6 +538,22 @@
       font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
     }
 
+    .edit-dialog {
+      width: min(440px, calc(100% - 28px));
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    .edit-dialog::backdrop { background: rgb(20 22 18 / 45%); }
+    .edit-dialog h2 { margin: 0 0 14px; font-size: 18px; }
+    .edit-dialog form { display: grid; gap: 10px; padding: 0; border: 0; }
+    .edit-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+    .edit-dialog .dialog-actions button { min-height: 38px; padding: 0 12px; }
+
     @keyframes arrive {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
@@ -488,6 +565,10 @@
       .task-actions { opacity: .82; }
       .task-actions button { width: 31px; height: 31px; }
       .footer { font-size: 11px; }
+      .task-options { grid-template-columns: 1fr 1fr; }
+      .task-options label:last-child { grid-column: 1 / -1; }
+      .board-create-row { align-items: stretch; flex-wrap: wrap; }
+      .board-create-row label { flex-basis: 100%; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -518,10 +599,55 @@
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none"><path d="M8 3.3v9.4M3.3 8h9.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           Add task
         </button>
+        <div class="task-options">
+          <label for="new-task-due">Due date
+            <input id="new-task-due" type="date">
+          </label>
+          <label for="new-task-repeat">Repeat
+            <select id="new-task-repeat">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </label>
+          <label for="new-task-reminder">Reminder (optional)
+            <input id="new-task-reminder" type="datetime-local">
+          </label>
+        </div>
       </form>
 
+      <div class="board-controls">
+        <form class="board-create-row" id="board-form">
+          <label for="new-board-name">New board
+            <input id="new-board-name" type="text" maxlength="60" placeholder="Board name">
+          </label>
+          <label for="board-template">Start from
+            <select id="board-template">
+              <option value="blank">Blank board</option>
+              <option value="trip">Trip</option>
+              <option value="study">Study</option>
+              <option value="event">Event</option>
+            </select>
+          </label>
+          <button class="sync-button" type="submit">Create board</button>
+        </form>
+        <div class="board-select-row">
+          <label for="board-select">Current board
+            <select id="board-select"></select>
+          </label>
+          <button class="sync-button" id="delete-board" type="button" hidden>Delete board</button>
+        </div>
+        <div>
+          <button class="sync-button" id="enable-reminders" type="button">Enable browser reminders</button>
+          <p class="reminder-status" id="reminder-status">Reminders are optional and only work while this page is open.</p>
+        </div>
+        <p class="reminder-status" id="data-trust-status" role="status" aria-live="polite"></p>
+        <p class="reminder-status" id="reminder-alert" role="status" aria-live="polite" hidden></p>
+      </div>
+
       <div class="list-heading">
-        <span>Today</span>
+        <span id="list-title">My tasks</span>
         <span class="task-count" id="task-count">0 tasks left</span>
       </div>
       <div class="progress-section">
@@ -538,6 +664,7 @@
           <button class="filter-button" type="button" data-filter="all" aria-pressed="true">All <span class="filter-count" id="all-count">0</span></button>
           <button class="filter-button" type="button" data-filter="active" aria-pressed="false">Active <span class="filter-count" id="active-count">0</span></button>
           <button class="filter-button" type="button" data-filter="completed" aria-pressed="false">Done <span class="filter-count" id="completed-count">0</span></button>
+          <button class="filter-button" type="button" data-filter="upcoming" aria-pressed="false">Upcoming <span class="filter-count" id="upcoming-count">0</span></button>
         </div>
         <button class="clear-completed" id="clear-completed" type="button" hidden>Clear done</button>
       </div>
@@ -551,6 +678,35 @@
         <span>Saved on this device</span>
       </footer>
     </section>
+    <dialog class="edit-dialog" id="edit-dialog" aria-labelledby="edit-dialog-title">
+      <h2 id="edit-dialog-title">Edit task</h2>
+      <form id="edit-task-form">
+        <label for="edit-task-text">Task
+          <input id="edit-task-text" type="text" maxlength="160" required>
+        </label>
+        <label for="edit-task-due">Due date
+          <input id="edit-task-due" type="date">
+        </label>
+        <label for="edit-task-repeat">Repeat
+          <select id="edit-task-repeat">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </label>
+        <label for="edit-task-reminder">Reminder (optional)
+          <input id="edit-task-reminder" type="datetime-local">
+        </label>
+        <label for="edit-task-board">Board
+          <select id="edit-task-board"></select>
+        </label>
+        <div class="dialog-actions">
+          <button class="sync-button" id="cancel-edit" type="button">Cancel</button>
+          <button class="add-button" type="submit">Save changes</button>
+        </div>
+      </form>
+    </dialog>
     <p class="tip">One thing at a time. You’ve got this.</p>
 
     <section class="sync-card" aria-label="Cloud sync">
@@ -559,7 +715,7 @@
         <span class="sync-state" id="sync-state" role="status" aria-live="polite">Local only</span>
       </div>
       <div id="setup-view">
-        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Task content is encrypted in this browser before upload, and Supabase row-level security isolates each account.</p>
+        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Board names, tasks, due dates, and reminders are encrypted in this browser before upload, and Supabase row-level security isolates each account.</p>
         <p class="sync-copy" id="hosting-notice"></p>
         <p class="sync-copy">In Supabase Authentication → URL Configuration, allow this exact redirect URL:</p>
         <code class="redirect-url" id="redirect-url"></code>
@@ -619,8 +775,14 @@ with check ((select auth.uid()) = user_id);</pre>
   <script>
     (() => {
       const STORAGE_KEY = "daylist-tasks-v1";
+      const QUARANTINE_KEY = "daylist-unverified-backup-v1";
       const CONFIG_KEY = "daylist-supabase-config-v1";
       const SYNCED_USER_KEY = "daylist-synced-user-v1";
+      const DEFAULT_BOARD_ID = "board-personal";
+      const MAX_TASKS = 5000;
+      const MAX_BOARDS = 100;
+      const recurringOptions = new Set(["none", "daily", "weekly", "monthly"]);
+      const starterBoards = [{ id: DEFAULT_BOARD_ID, name: "My tasks", updatedAt: 0, changeId: "legacy", deletedAt: null }];
       const starterTasks = [
         { id: "welcome-plan", text: "Plan the week ahead", completed: true, updatedAt: 0, changeId: "legacy" },
         { id: "welcome-walk", text: "Take a walk and get some fresh air", completed: false, updatedAt: 0, changeId: "legacy" },
@@ -641,8 +803,21 @@ with check ((select auth.uid()) = user_id);</pre>
       const allCount = document.querySelector("#all-count");
       const activeCount = document.querySelector("#active-count");
       const completedCount = document.querySelector("#completed-count");
+      const upcomingCount = document.querySelector("#upcoming-count");
       const clearCompletedButton = document.querySelector("#clear-completed");
       const filterButtons = [...document.querySelectorAll("[data-filter]")];
+      const boardForm = document.querySelector("#board-form");
+      const boardNameInput = document.querySelector("#new-board-name");
+      const boardTemplateSelect = document.querySelector("#board-template");
+      const boardSelect = document.querySelector("#board-select");
+      const deleteBoardButton = document.querySelector("#delete-board");
+      const listTitle = document.querySelector("#list-title");
+      const enableRemindersButton = document.querySelector("#enable-reminders");
+      const reminderStatus = document.querySelector("#reminder-status");
+      const reminderAlert = document.querySelector("#reminder-alert");
+      const dataTrustStatus = document.querySelector("#data-trust-status");
+      const editDialog = document.querySelector("#edit-dialog");
+      const editTaskForm = document.querySelector("#edit-task-form");
       const syncState = document.querySelector("#sync-state");
       const setupView = document.querySelector("#setup-view");
       const authView = document.querySelector("#auth-view");
@@ -677,17 +852,201 @@ with check ((select auth.uid()) = user_id);</pre>
       let pollTimer = null;
       let activeFilter = "all";
       let localTaskRevision = 0;
-      let tasks = loadTasks();
+      let localDataWarning = "";
+      let reminderHistoryWarning = false;
+      let quarantinedLocalData = null;
+      const initialPlanner = loadPlanner();
+      let tasks = initialPlanner.tasks;
+      let boards = initialPlanner.boards;
+      let activeBoardId = initialPlanner.activeBoardId;
+      let editingTaskId = null;
 
-      function normalizeTask(task) {
+      function isValidDay(value) {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00.000Z`);
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+      }
+
+      function isValidTimestamp(value) {
+        const timestamp = typeof value === "string" ? Date.parse(value) : NaN;
+        return Number.isFinite(timestamp) && timestamp >= 0 &&
+          timestamp <= Date.now() + 365 * 24 * 60 * 60 * 1000;
+      }
+
+      function isValidRecordTime(value) {
+        return Number.isSafeInteger(value) && value >= 0 &&
+          value <= Date.now() + 365 * 24 * 60 * 60 * 1000;
+      }
+
+      function compactSeriesId(value) {
+        if (value.length <= 140) return value;
+        let hash = 2166136261;
+        for (let index = 0; index < value.length; index += 1) {
+          hash = Math.imul(hash ^ value.charCodeAt(index), 16777619) >>> 0;
+        }
+        return `${value.slice(0, 120)}-${hash.toString(36)}`;
+      }
+
+      function normalizeTask(task, legacy = false) {
+        if (!task || typeof task !== "object" || Array.isArray(task) ||
+            typeof task.id !== "string" || !task.id || task.id.length > 200 ||
+            typeof task.text !== "string" || !task.text.trim() || task.text.length > 160 ||
+            typeof task.completed !== "boolean") {
+          throw new Error("A task record failed validation.");
+        }
+        if (!legacy && (typeof task.boardId !== "string" || task.dueDate === undefined ||
+            task.recurrence === undefined || task.seriesId === undefined ||
+            task.seriesDay === undefined || task.reminderAt === undefined ||
+            task.updatedAt === undefined || task.changeId === undefined || task.deletedAt === undefined)) {
+          throw new Error("A task record is missing required planner metadata.");
+        }
+        const recurrence = task.recurrence === undefined ? "none" : task.recurrence;
+        const dueDate = task.dueDate == null || task.dueDate === "" ? null : task.dueDate;
+        const reminderAt = task.reminderAt == null || task.reminderAt === "" ? null : task.reminderAt;
+        const updatedAt = task.updatedAt === undefined ? 0 : task.updatedAt;
+        const deletedAt = task.deletedAt === undefined ? null : task.deletedAt;
+        const changeId = task.changeId === undefined && legacy ? "legacy" : task.changeId;
+        const boardId = task.boardId === undefined ? DEFAULT_BOARD_ID : task.boardId;
+        const seriesId = task.seriesId == null || task.seriesId === "" ? null : task.seriesId;
+        const seriesDay = task.seriesDay == null ? null : task.seriesDay;
+        if (!recurringOptions.has(recurrence) ||
+            (dueDate !== null && !isValidDay(dueDate)) ||
+            (reminderAt !== null && (typeof reminderAt !== "string" || reminderAt.length > 40 ||
+              !Number.isFinite(Date.parse(reminderAt)) || new Date(reminderAt).toISOString() !== reminderAt)) ||
+            !isValidRecordTime(updatedAt) ||
+            (deletedAt !== null && !isValidRecordTime(deletedAt)) ||
+            typeof changeId !== "string" || changeId.length > 200 ||
+            typeof boardId !== "string" || !boardId || boardId.length > 200 ||
+            (seriesId !== null && (typeof seriesId !== "string" || !seriesId || seriesId.length > 140)) ||
+            (seriesDay !== null && (!Number.isInteger(seriesDay) || seriesDay < 1 || seriesDay > 31))) {
+          throw new Error("A task record failed validation.");
+        }
         return {
           id: task.id,
-          text: task.text,
+          text: task.text.trim(),
           completed: task.completed,
-          updatedAt: Number.isFinite(task.updatedAt) ? task.updatedAt : 0,
-          changeId: typeof task.changeId === "string" ? task.changeId : "legacy",
-          deletedAt: Number.isFinite(task.deletedAt) ? task.deletedAt : null
+          boardId,
+          dueDate,
+          recurrence,
+          seriesId: seriesId || (recurrence !== "none" ? compactSeriesId(task.id) : null),
+          seriesDay: seriesDay || (recurrence !== "none" && dueDate ? Number(dueDate.slice(-2)) : null),
+          reminderAt,
+          updatedAt,
+          changeId,
+          deletedAt
         };
+      }
+
+      function normalizeBoard(board, legacy = false) {
+        if (!board || typeof board !== "object" || Array.isArray(board) ||
+            typeof board.id !== "string" || !board.id || board.id.length > 200 ||
+            typeof board.name !== "string" || !board.name.trim() || board.name.trim().length > 60) {
+          throw new Error("A board record failed validation.");
+        }
+        if (!legacy && (board.updatedAt === undefined || board.changeId === undefined || board.deletedAt === undefined)) {
+          throw new Error("A board record is missing required planner metadata.");
+        }
+        const updatedAt = board.updatedAt === undefined ? 0 : board.updatedAt;
+        const deletedAt = board.deletedAt === undefined ? null : board.deletedAt;
+        const changeId = board.changeId === undefined && legacy ? "legacy" : board.changeId;
+        if (!isValidRecordTime(updatedAt) ||
+            (deletedAt !== null && !isValidRecordTime(deletedAt)) ||
+            typeof changeId !== "string" || changeId.length > 200 ||
+            (board.id === DEFAULT_BOARD_ID && deletedAt !== null)) {
+          throw new Error("A board record failed validation.");
+        }
+        return {
+          id: board.id,
+          name: board.name.trim(),
+          updatedAt,
+          changeId,
+          deletedAt: board.id === DEFAULT_BOARD_ID ? null : deletedAt
+        };
+      }
+
+      function validateUniqueIds(records, kind) {
+        if (records.length > (kind === "task" ? MAX_TASKS : MAX_BOARDS)) {
+          throw new Error(`The ${kind} list exceeds the supported size.`);
+        }
+        const ids = new Set();
+        for (const record of records) {
+          if (ids.has(record.id)) throw new Error(`The ${kind} list contains duplicate identifiers.`);
+          ids.add(record.id);
+        }
+      }
+
+      function normalizePlannerState(value) {
+        const legacy = Array.isArray(value);
+        if (!legacy && (!value || typeof value !== "object" || Array.isArray(value) || value.schemaVersion !== 2)) {
+          throw new Error("Planner data has an unsupported version.");
+        }
+        const rawTasks = legacy ? value : value.tasks;
+        const rawBoards = legacy ? starterBoards : value.boards;
+        if (!Array.isArray(rawTasks) || !Array.isArray(rawBoards)) {
+          throw new Error("Planner data is incomplete.");
+        }
+        const normalizedTasks = rawTasks.map(task => normalizeTask(task, legacy));
+        const normalizedBoards = rawBoards.map(board => normalizeBoard(board, legacy));
+        validateUniqueIds(normalizedTasks, "task");
+        validateUniqueIds(normalizedBoards, "board");
+        const boardIds = new Set(normalizedBoards.map(board => board.id));
+        if (!boardIds.has(DEFAULT_BOARD_ID) || normalizedTasks.some(task => !boardIds.has(task.boardId))) {
+          throw new Error("Planner records reference an unknown board.");
+        }
+        return {
+          state: { schemaVersion: 2, tasks: normalizedTasks, boards: normalizedBoards },
+          legacy
+        };
+      }
+
+      function localStateValue() {
+        return {
+          schemaVersion: 2,
+          tasks,
+          boards,
+          selectedBoardId: activeBoardId
+        };
+      }
+
+      function syncStateValue(state = { tasks, boards }) {
+        return { schemaVersion: 2, tasks: state.tasks, boards: state.boards };
+      }
+
+      function loadPlanner() {
+        let saved = null;
+        try {
+          saved = localStorage.getItem(STORAGE_KEY);
+          if (saved === null) {
+            return {
+              tasks: starterTasks.map(task => normalizeTask(task, true)),
+              boards: starterBoards.map(normalizeBoard),
+              activeBoardId: DEFAULT_BOARD_ID,
+              needsMigration: false
+            };
+          }
+          const parsed = JSON.parse(saved);
+          const normalized = normalizePlannerState(parsed);
+          const selected = !normalized.legacy && typeof parsed.selectedBoardId === "string"
+            ? parsed.selectedBoardId
+            : DEFAULT_BOARD_ID;
+          const activeBoard = normalized.state.boards.find(board => board.id === selected && board.deletedAt === null);
+          return {
+            tasks: normalized.state.tasks,
+            boards: normalized.state.boards,
+            activeBoardId: activeBoard ? selected : DEFAULT_BOARD_ID,
+            needsMigration: normalized.legacy
+          };
+        } catch (error) {
+          console.error("Could not verify Daylist planner data from localStorage.", error);
+          localDataWarning = "Saved planner data failed verification; the original is preserved until the next save.";
+          quarantinedLocalData = saved;
+          return {
+            tasks: starterTasks.map(task => normalizeTask(task, true)),
+            boards: starterBoards.map(normalizeBoard),
+            activeBoardId: DEFAULT_BOARD_ID,
+            needsMigration: false
+          };
+        }
       }
 
       function stampTask(task) {
@@ -695,8 +1054,17 @@ with check ((select auth.uid()) = user_id);</pre>
         task.changeId = `${task.updatedAt}-${Math.random().toString(36).slice(2)}`;
       }
 
+      function stampBoard(board) {
+        board.updatedAt = Date.now();
+        board.changeId = `${board.updatedAt}-${Math.random().toString(36).slice(2)}`;
+      }
+
+      function activeBoards() {
+        return boards.filter(board => board.deletedAt === null);
+      }
+
       function activeTasks() {
-        return tasks.filter(task => task.deletedAt === null);
+        return tasks.filter(task => task.deletedAt === null && task.boardId === activeBoardId);
       }
 
       function mergeTaskSets(localTasks, remoteTasks) {
@@ -713,57 +1081,185 @@ with check ((select auth.uid()) = user_id);</pre>
         return [...merged.values()];
       }
 
-      function sameTaskSets(first, second) {
+      function mergeBoardSets(localBoards, remoteBoards) {
+        const merged = new Map(localBoards.map(board => [board.id, board]));
+        for (const remoteBoard of remoteBoards) {
+          const localBoard = merged.get(remoteBoard.id);
+          if (!localBoard ||
+              remoteBoard.updatedAt > localBoard.updatedAt ||
+              (remoteBoard.updatedAt === localBoard.updatedAt &&
+                remoteBoard.changeId.localeCompare(localBoard.changeId) >= 0)) {
+            merged.set(remoteBoard.id, remoteBoard);
+          }
+        }
+        const result = [...merged.values()];
+        if (!result.some(board => board.id === DEFAULT_BOARD_ID)) {
+          result.push(normalizeBoard(starterBoards[0]));
+        }
+        return result;
+      }
+
+      function mergePlannerStates(first, second) {
+        const merged = {
+          tasks: mergeTaskSets(first.tasks, second.tasks),
+          boards: mergeBoardSets(first.boards, second.boards)
+        };
+        const liveBoardIds = new Set(merged.boards.filter(board => board.deletedAt === null).map(board => board.id));
+        const defaultBoard = merged.boards.find(board => board.id === DEFAULT_BOARD_ID);
+        merged.tasks = merged.tasks.map(task => {
+          if (task.deletedAt === null && !liveBoardIds.has(task.boardId)) {
+            const repaired = { ...task, boardId: DEFAULT_BOARD_ID };
+            stampTask(repaired);
+            return repaired;
+          }
+          return task;
+        });
+        if (!defaultBoard || defaultBoard.deletedAt !== null) {
+          merged.boards = merged.boards.filter(board => board.id !== DEFAULT_BOARD_ID);
+          merged.boards.push(normalizeBoard(starterBoards[0]));
+        }
+        return merged;
+      }
+
+      function sameRecordSets(first, second) {
         if (first.length !== second.length) return false;
         const secondById = new Map(second.map(task => [task.id, task]));
         return first.every(task => JSON.stringify(task) === JSON.stringify(secondById.get(task.id)));
       }
 
-      function loadTasks() {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved === null) return starterTasks.map(normalizeTask);
-          const parsed = JSON.parse(saved);
-          if (!Array.isArray(parsed)) throw new Error("Saved tasks must be an array.");
-          return parsed.filter(task =>
-            task && typeof task.id === "string" &&
-            typeof task.text === "string" && typeof task.completed === "boolean"
-          ).map(normalizeTask);
-        } catch (error) {
-          console.error("Could not load Daylist tasks from localStorage.", error);
-          return starterTasks.map(normalizeTask);
+      function samePlannerStates(first, second) {
+        return sameRecordSets(first.tasks, second.tasks) &&
+          sameRecordSets(first.boards, second.boards);
+      }
+
+      function preserveQuarantinedLocalData() {
+        if (quarantinedLocalData === null) return;
+        let backupKey = `${QUARANTINE_KEY}-${Date.now()}`;
+        let suffix = 1;
+        while (localStorage.getItem(backupKey) !== null) {
+          backupKey = `${QUARANTINE_KEY}-${Date.now()}-${suffix}`;
+          suffix += 1;
         }
+        localStorage.setItem(backupKey, quarantinedLocalData);
+        quarantinedLocalData = null;
+      }
+
+      function persistLocalState() {
+        const verified = normalizePlannerState(syncStateValue({ tasks, boards })).state;
+        tasks = verified.tasks;
+        boards = verified.boards;
+        if (!activeBoards().some(board => board.id === activeBoardId)) activeBoardId = DEFAULT_BOARD_ID;
+        preserveQuarantinedLocalData();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(localStateValue()));
+        localDataWarning = "";
+        updateDataTrustStatus();
+      }
+
+      function updateDataTrustStatus() {
+        dataTrustStatus.textContent = localDataWarning ||
+          (reminderHistoryWarning
+            ? "Reminder history failed verification; reminders may be shown again."
+            : "Local and downloaded planner records are validated before use; cloud data is end-to-end encrypted.");
       }
 
       function saveTasks() {
         localTaskRevision += 1;
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          persistLocalState();
         } catch (error) {
-          console.error("Could not save Daylist tasks to localStorage.", error);
+          console.error("Could not save Daylist planner data to localStorage.", error);
+          setSyncStatus("Could not save planner data on this device", true);
+          return false;
         }
         if (cloudUser && !remoteSyncing && vaultKey && vaultUserId === cloudUser.id) {
           queueCloudWrite();
         }
+        return true;
       }
 
-      function applySyncedTasks(nextTasks) {
+      function applySyncedState(nextState) {
         remoteSyncing = true;
-        tasks = nextTasks;
+        tasks = nextState.tasks;
+        boards = nextState.boards;
+        if (!activeBoards().some(board => board.id === activeBoardId)) activeBoardId = DEFAULT_BOARD_ID;
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          persistLocalState();
         } catch (error) {
-          console.error("Could not save synced Daylist tasks locally.", error);
+          console.error("Could not save synced Daylist planner data locally.", error);
         } finally {
           remoteSyncing = false;
         }
         render();
       }
 
-      function applyCommittedTasks(committedTasks, revisionAtStart) {
+      function applyCommittedState(committedState, revisionAtStart) {
         const unchanged = localTaskRevision === revisionAtStart;
-        applySyncedTasks(unchanged ? committedTasks : mergeTaskSets(tasks, committedTasks));
+        applySyncedState(unchanged
+          ? committedState
+          : mergePlannerStates({ tasks, boards }, committedState));
         return unchanged;
+      }
+
+      function todayString() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      }
+
+      function offsetDay(day, offset) {
+        const date = new Date(`${day}T12:00:00.000Z`);
+        date.setUTCDate(date.getUTCDate() + offset);
+        return date.toISOString().slice(0, 10);
+      }
+
+      function nextRecurringDay(task) {
+        const base = task.dueDate || todayString();
+        const date = new Date(`${base}T12:00:00.000Z`);
+        if (task.recurrence === "daily") date.setUTCDate(date.getUTCDate() + 1);
+        if (task.recurrence === "weekly") date.setUTCDate(date.getUTCDate() + 7);
+        if (task.recurrence === "monthly") {
+          const anchorDay = task.seriesDay || date.getUTCDate();
+          date.setUTCDate(1);
+          date.setUTCMonth(date.getUTCMonth() + 1);
+          const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+          date.setUTCDate(Math.min(anchorDay, lastDay));
+        }
+        return date.toISOString().slice(0, 10);
+      }
+
+      function formatDay(day) {
+        return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: new Date(`${day}T12:00:00`).getFullYear() === new Date().getFullYear() ? undefined : "numeric"
+        });
+      }
+
+      function toLocalDateTime(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return "";
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+      }
+
+      function toReminderTimestamp(value) {
+        if (!value) return null;
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) throw new Error("Choose a valid reminder date and time.");
+        return date.toISOString();
+      }
+
+      function updateBoardSelect() {
+        const select = document.querySelector("#edit-task-board");
+        const options = activeBoards().map(board => {
+          const option = document.createElement("option");
+          option.value = board.id;
+          option.textContent = board.name;
+          return option;
+        });
+        boardSelect.replaceChildren(...options.map(option => option.cloneNode(true)));
+        select.replaceChildren(...options);
+        boardSelect.value = activeBoardId;
+        deleteBoardButton.hidden = activeBoardId === DEFAULT_BOARD_ID;
       }
 
       function createTaskRow(task) {
@@ -784,9 +1280,33 @@ with check ((select auth.uid()) = user_id);</pre>
         checkUi.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><path d="m3.2 8.2 3 3 6.6-6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         checkWrap.append(checkbox, checkUi);
 
+        const content = document.createElement("div");
+        content.className = "task-content";
         const text = document.createElement("span");
         text.className = "task-text";
         text.textContent = task.text;
+        content.append(text);
+        if (task.dueDate || task.recurrence !== "none" || task.reminderAt) {
+          const metadata = document.createElement("div");
+          metadata.className = "task-meta";
+          if (task.dueDate) {
+            const due = document.createElement("span");
+            due.textContent = `Due ${formatDay(task.dueDate)}`;
+            if (!task.completed && task.dueDate < todayString()) due.className = "overdue";
+            metadata.append(due);
+          }
+          if (task.recurrence !== "none") {
+            const repeat = document.createElement("span");
+            repeat.textContent = `Repeats ${task.recurrence}`;
+            metadata.append(repeat);
+          }
+          if (task.reminderAt) {
+            const reminder = document.createElement("span");
+            reminder.textContent = "Reminder set";
+            metadata.append(reminder);
+          }
+          content.append(metadata);
+        }
 
         const actions = document.createElement("span");
         actions.className = "task-actions";
@@ -804,40 +1324,46 @@ with check ((select auth.uid()) = user_id);</pre>
         remove.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 6h11M8 6V4.5h4V6m2.5 0-.6 9.5H6.1L5.5 6m2.8 2.5v4.5m3.4-4.5v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
         edit.addEventListener("click", () => {
-          const field = document.createElement("input");
-          field.className = "task-edit-input";
-          field.type = "text";
-          field.maxLength = 160;
-          field.value = task.text;
-          field.setAttribute("aria-label", `Edit task "${task.text}"`);
-          let finished = false;
-          const finishEditing = commit => {
-            if (finished) return;
-            finished = true;
-            const nextText = field.value.trim();
-            if (commit && nextText) {
-              task.text = nextText;
-              stampTask(task);
-              saveTasks();
-            }
-            render();
-          };
-          field.addEventListener("keydown", event => {
-            if (event.key === "Enter") finishEditing(true);
-            if (event.key === "Escape") finishEditing(false);
-          });
-          field.addEventListener("blur", () => finishEditing(true));
-          text.replaceWith(field);
-          field.focus();
-          field.select();
+          editingTaskId = task.id;
+          updateBoardSelect();
+          document.querySelector("#edit-task-text").value = task.text;
+          document.querySelector("#edit-task-due").value = task.dueDate || "";
+          document.querySelector("#edit-task-repeat").value = task.recurrence;
+          document.querySelector("#edit-task-reminder").value = toLocalDateTime(task.reminderAt);
+          document.querySelector("#edit-task-board").value = task.boardId;
+          editDialog.showModal();
         });
 
         checkbox.addEventListener("change", () => {
           task.completed = checkbox.checked;
           stampTask(task);
+          if (task.completed && task.recurrence !== "none") {
+            const nextDueDate = nextRecurringDay(task);
+            const seriesId = task.seriesId || compactSeriesId(task.id);
+            const nextId = `repeat-${seriesId}-${nextDueDate}`;
+            if (!tasks.some(candidate => candidate.id === nextId)) {
+              const nextTask = {
+                id: nextId,
+                text: task.text,
+                completed: false,
+                boardId: task.boardId,
+                dueDate: nextDueDate,
+                recurrence: task.recurrence,
+                seriesId,
+                seriesDay: task.seriesDay || (task.dueDate ? Number(task.dueDate.slice(-2)) : Number(nextDueDate.slice(-2))),
+                reminderAt: null,
+                updatedAt: 0,
+                changeId: "",
+                deletedAt: null
+              };
+              stampTask(nextTask);
+              tasks.unshift(nextTask);
+            }
+          }
           saveTasks();
           render();
         });
+        boardNameInput.addEventListener("input", () => boardNameInput.setCustomValidity(""));
 
         remove.addEventListener("click", () => {
           row.classList.add("removing");
@@ -851,7 +1377,7 @@ with check ((select auth.uid()) = user_id);</pre>
         });
 
         actions.append(edit, remove);
-        row.append(checkWrap, text, actions);
+        row.append(checkWrap, content, actions);
         return row;
       }
 
@@ -859,6 +1385,10 @@ with check ((select auth.uid()) = user_id);</pre>
         const visible = activeTasks();
         if (activeFilter === "active") return visible.filter(task => !task.completed);
         if (activeFilter === "completed") return visible.filter(task => task.completed);
+        if (activeFilter === "upcoming") {
+          return visible.filter(task => !task.completed && task.dueDate)
+            .sort((first, second) => first.dueDate.localeCompare(second.dueDate));
+        }
         return visible;
       }
 
@@ -873,16 +1403,23 @@ with check ((select auth.uid()) = user_id);</pre>
         allCount.textContent = visible.length;
         activeCount.textContent = remaining;
         completedCount.textContent = completed;
+        upcomingCount.textContent = visible.filter(task => !task.completed && task.dueDate).length;
         progressLabel.textContent = `${completed} of ${visible.length} complete`;
         progressPercent.textContent = `${percentage}%`;
         progressTrack.setAttribute("aria-valuenow", percentage);
         progressFill.style.width = `${percentage}%`;
         clearCompletedButton.hidden = completed === 0;
+        const currentBoard = activeBoards().find(board => board.id === activeBoardId);
+        listTitle.textContent = currentBoard
+          ? `${currentBoard.name}${activeFilter === "upcoming" ? " · Upcoming" : ""}`
+          : "My tasks";
         filterButtons.forEach(button => {
           button.setAttribute("aria-pressed", String(button.dataset.filter === activeFilter));
         });
         if (visible.length === 0) {
           emptyMessage.textContent = "Nothing on your list. Enjoy the breathing room.";
+        } else if (activeFilter === "upcoming") {
+          emptyMessage.textContent = "No upcoming due tasks. Add a due date to see it here.";
         } else if (activeFilter === "active") {
           emptyMessage.textContent = "You’re all caught up. Nice work.";
         } else {
@@ -892,6 +1429,7 @@ with check ((select auth.uid()) = user_id);</pre>
       }
 
       function render() {
+        updateBoardSelect();
         list.replaceChildren(...filteredTasks().map(createTaskRow));
         updateSummary();
       }
@@ -914,9 +1452,178 @@ with check ((select auth.uid()) = user_id);</pre>
         render();
       });
 
+      const templateDefinitions = {
+        trip: {
+          name: "Trip plan",
+          tasks: [
+            { text: "Choose your destination", dueIn: 7 },
+            { text: "Book travel and accommodation", dueIn: 3 },
+            { text: "Pack the essentials", dueIn: 1 }
+          ]
+        },
+        study: {
+          name: "Study plan",
+          tasks: [
+            { text: "Choose this week’s study goals", dueIn: 1 },
+            { text: "Review notes and key concepts", dueIn: 2 },
+            { text: "Complete a practice exercise", dueIn: 4 }
+          ]
+        },
+        event: {
+          name: "Event plan",
+          tasks: [
+            { text: "Set the date and confirm the venue", dueIn: 7 },
+            { text: "Invite guests", dueIn: 4 },
+            { text: "Prepare the event-day checklist", dueIn: 1 }
+          ]
+        }
+      };
+
+      function createId(prefix) {
+        return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+
+      function saveBoardSelection() {
+        try {
+          persistLocalState();
+        } catch (error) {
+          console.error("Could not save the selected Daylist board.", error);
+          setSyncStatus("Could not save the selected board", true);
+        }
+      }
+
+      boardSelect.addEventListener("change", () => {
+        activeBoardId = boardSelect.value;
+        activeFilter = "all";
+        saveBoardSelection();
+        render();
+      });
+
+      boardForm.addEventListener("submit", event => {
+        event.preventDefault();
+        if (boards.length >= MAX_BOARDS) {
+          setSyncStatus("This planner has reached the board limit.", true);
+          return;
+        }
+        const templateId = boardTemplateSelect.value;
+        const template = templateDefinitions[templateId];
+        if (template && tasks.length + template.tasks.length > MAX_TASKS) {
+          setSyncStatus("This planner has reached the task limit.", true);
+          return;
+        }
+        const name = boardNameInput.value.trim() || (template && template.name);
+        if (!name || name.length > 60) {
+          boardNameInput.setCustomValidity("Enter a board name (up to 60 characters).");
+          boardNameInput.reportValidity();
+          return;
+        }
+        boardNameInput.setCustomValidity("");
+        const board = {
+          id: createId("board"),
+          name,
+          updatedAt: 0,
+          changeId: "",
+          deletedAt: null
+        };
+        stampBoard(board);
+        boards.push(board);
+        if (template) {
+          template.tasks.forEach((starter, index) => {
+            const task = {
+              id: createId(`template-${index}`),
+              text: starter.text,
+              completed: false,
+              boardId: board.id,
+              dueDate: offsetDay(todayString(), starter.dueIn),
+              recurrence: "none",
+              seriesId: null,
+              seriesDay: null,
+              reminderAt: null,
+              updatedAt: 0,
+              changeId: "",
+              deletedAt: null
+            };
+            stampTask(task);
+            tasks.unshift(task);
+          });
+        }
+        activeBoardId = board.id;
+        activeFilter = "all";
+        boardNameInput.value = "";
+        boardTemplateSelect.value = "blank";
+        saveTasks();
+        render();
+      });
+
+      deleteBoardButton.addEventListener("click", () => {
+        const board = activeBoards().find(item => item.id === activeBoardId);
+        if (!board || board.id === DEFAULT_BOARD_ID) return;
+        tasks.filter(task => task.deletedAt === null && task.boardId === board.id).forEach(task => {
+          task.boardId = DEFAULT_BOARD_ID;
+          stampTask(task);
+        });
+        board.deletedAt = Date.now();
+        stampBoard(board);
+        activeBoardId = DEFAULT_BOARD_ID;
+        activeFilter = "all";
+        saveTasks();
+        render();
+      });
+
+      editTaskForm.addEventListener("submit", event => {
+        event.preventDefault();
+        const task = tasks.find(item => item.id === editingTaskId && item.deletedAt === null);
+        if (!task) {
+          editDialog.close();
+          return;
+        }
+        const nextText = document.querySelector("#edit-task-text").value.trim();
+        if (!nextText || nextText.length > 160) return;
+        const nextRecurrence = document.querySelector("#edit-task-repeat").value;
+        const nextDueDate = document.querySelector("#edit-task-due").value || null;
+        if (!recurringOptions.has(nextRecurrence) || (nextDueDate && !isValidDay(nextDueDate))) return;
+        const recurrenceChanged = task.recurrence !== nextRecurrence;
+        const dueDateChanged = task.dueDate !== nextDueDate;
+        let reminderAt;
+        try {
+          reminderAt = toReminderTimestamp(document.querySelector("#edit-task-reminder").value);
+        } catch (error) {
+          setSyncStatus(error.message, true);
+          return;
+        }
+        task.text = nextText;
+        task.dueDate = nextDueDate;
+        task.recurrence = nextRecurrence;
+        task.reminderAt = reminderAt;
+        task.boardId = document.querySelector("#edit-task-board").value;
+        task.seriesId = nextRecurrence === "none" ? null : (task.seriesId || compactSeriesId(task.id));
+        task.seriesDay = nextRecurrence === "none"
+          ? null
+          : (recurrenceChanged || dueDateChanged || !task.seriesDay
+            ? Number((nextDueDate || todayString()).slice(-2))
+            : task.seriesDay);
+        stampTask(task);
+        saveTasks();
+        editDialog.close();
+        render();
+      });
+
+      document.querySelector("#cancel-edit").addEventListener("click", () => editDialog.close());
+
       function setSyncStatus(message, isError = false) {
         syncState.textContent = message;
         syncState.classList.toggle("sync-error", isError);
+      }
+
+      function isVerificationFailure(error) {
+        return /verification|validation|unsupported|unknown board|duplicate|supported size|incomplete|missing required|integrity/i
+          .test(error && typeof error.message === "string" ? error.message : "");
+      }
+
+      function showVerificationFailure(error) {
+        if (!isVerificationFailure(error)) return false;
+        dataTrustStatus.textContent = "Unverified planner data was rejected; it was not applied or uploaded.";
+        return true;
       }
 
       function showSyncView() {
@@ -933,7 +1640,7 @@ with check ((select auth.uid()) = user_id);</pre>
         }
         if (cloudUser && !unlocked) {
           if (vaultMode === "create") {
-            vaultCopy.textContent = "Create a private sync passphrase to encrypt your tasks before they leave this device. Use at least 14 characters.";
+            vaultCopy.textContent = "Create a private sync passphrase to encrypt your planner data before it leaves this device. Use at least 14 characters.";
             vaultPassphraseInput.autocomplete = "new-password";
             vaultSubmitButton.textContent = "Create encrypted vault";
           } else if (vaultMode === "migrate") {
@@ -941,24 +1648,19 @@ with check ((select auth.uid()) = user_id);</pre>
             vaultPassphraseInput.autocomplete = "new-password";
             vaultSubmitButton.textContent = "Encrypt and unlock";
           } else {
-            vaultCopy.textContent = "Unlock your encrypted task list with the private passphrase you created on another device.";
+            vaultCopy.textContent = "Unlock your encrypted planner with the private passphrase you created on another device.";
             vaultPassphraseInput.autocomplete = "current-password";
             vaultSubmitButton.textContent = "Unlock task vault";
           }
         }
       }
 
-      function validCloudTasks(value) {
-        return Array.isArray(value) ? value.filter(task =>
-          task && typeof task.id === "string" &&
-          typeof task.text === "string" && typeof task.completed === "boolean"
-        ).map(normalizeTask) : [];
-      }
-
       function isEncryptedTasks(value) {
         return value && value.version === 1 && value.algorithm === "AES-GCM" &&
-          typeof value.salt === "string" && typeof value.iv === "string" &&
-          typeof value.ciphertext === "string";
+          typeof value.salt === "string" && /^[A-Za-z0-9+/]{22}==$/.test(value.salt) &&
+          typeof value.iv === "string" && /^[A-Za-z0-9+/]{16}$/.test(value.iv) &&
+          typeof value.ciphertext === "string" && value.ciphertext.length >= 24 &&
+          value.ciphertext.length <= 8000000 && /^[A-Za-z0-9+/]+={0,2}$/.test(value.ciphertext);
       }
 
       function toBase64(bytes) {
@@ -998,7 +1700,7 @@ with check ((select auth.uid()) = user_id);</pre>
         const ciphertext = await window.crypto.subtle.encrypt(
           { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(userId) },
           key,
-          new TextEncoder().encode(JSON.stringify(value))
+          new TextEncoder().encode(JSON.stringify(syncStateValue(value)))
         );
         return {
           version: 1,
@@ -1016,11 +1718,10 @@ with check ((select auth.uid()) = user_id);</pre>
             key,
             fromBase64(envelope.ciphertext)
           );
-          const tasksFromVault = JSON.parse(new TextDecoder().decode(plaintext));
-          if (!Array.isArray(tasksFromVault)) throw new Error("Invalid task vault data.");
-          return validCloudTasks(tasksFromVault);
+          const plannerFromVault = JSON.parse(new TextDecoder().decode(plaintext));
+          return normalizePlannerState(plannerFromVault);
         } catch (_error) {
-          throw new Error("That passphrase could not unlock this task list.");
+          throw new Error("The encrypted planner data failed integrity or schema verification.");
         }
       }
 
@@ -1038,7 +1739,7 @@ with check ((select auth.uid()) = user_id);</pre>
 
       async function writeCloudTasks(snapshot, userId = cloudUser && cloudUser.id) {
         if (!supabaseClient || !userId || !vaultKey || vaultUserId !== userId) return;
-        let candidate = snapshot;
+        let candidate = normalizePlannerState(syncStateValue(snapshot)).state;
         for (let attempt = 0; attempt < 6; attempt += 1) {
           const { data, error } = await supabaseClient
             .from("daylist_lists")
@@ -1047,7 +1748,10 @@ with check ((select auth.uid()) = user_id);</pre>
             .maybeSingle();
           if (error) throw error;
 
-          let remoteTasks = [];
+          if (data && !isValidTimestamp(data.updated_at)) {
+            throw new Error("Cloud sync metadata failed verification.");
+          }
+          let remoteState = null;
           if (data && isEncryptedTasks(data.tasks)) {
             if (data.tasks.salt !== toBase64(vaultSalt)) {
               const changedError = new Error("The encrypted task vault changed.");
@@ -1055,14 +1759,13 @@ with check ((select auth.uid()) = user_id);</pre>
               changedError.encryptedData = data.tasks;
               throw changedError;
             }
-            remoteTasks = await decryptTasks(data.tasks, vaultKey, userId);
-          } else if (data && Array.isArray(data.tasks)) {
-            remoteTasks = validCloudTasks(data.tasks);
+            remoteState = await decryptTasks(data.tasks, vaultKey, userId);
           } else if (data) {
-            throw new Error("The cloud task vault has an unsupported format.");
+            remoteState = normalizePlannerState(data.tasks);
           }
 
-          candidate = mergeTaskSets(candidate, remoteTasks);
+          if (remoteState) candidate = mergePlannerStates(candidate, remoteState.state);
+          candidate = normalizePlannerState(syncStateValue(candidate)).state;
           const encryptedTasks = await encryptTasks(candidate, vaultKey, vaultSalt, userId);
           const updatedAt = new Date(Math.max(
             Date.now(),
@@ -1097,10 +1800,10 @@ with check ((select auth.uid()) = user_id);</pre>
         cloudWriteChain = cloudWriteChain.catch(() => {}).then(async () => {
           if (!cloudUser || !vaultKey || vaultUserId !== cloudUser.id) return;
           const revisionAtStart = localTaskRevision;
-          const snapshot = JSON.parse(JSON.stringify(tasks));
+          const snapshot = JSON.parse(JSON.stringify({ tasks, boards }));
           const committed = await writeCloudTasks(snapshot, userId);
           if (!cloudUser || cloudUser.id !== userId || vaultUserId !== userId) return;
-          const unchanged = applyCommittedTasks(committed, revisionAtStart);
+          const unchanged = applyCommittedState(committed, revisionAtStart);
           if (unchanged) {
             cloudDirty = false;
             try {
@@ -1117,8 +1820,10 @@ with check ((select auth.uid()) = user_id);</pre>
             return;
           }
           cloudDirty = true;
-          console.error("Could not sync Daylist tasks.", error);
-          setSyncStatus("Offline — saved on this device", true);
+          console.error("Could not sync Daylist planner data.", error);
+          setSyncStatus(showVerificationFailure(error)
+            ? "Sync blocked — planner data failed verification"
+            : "Offline — saved on this device", true);
         });
         setSyncStatus("Syncing…");
       }
@@ -1141,8 +1846,8 @@ with check ((select auth.uid()) = user_id);</pre>
         }
 
         if (!vaultKey || vaultUserId !== userId) {
-          if (data && !isEncryptedTasks(data.tasks) && !Array.isArray(data.tasks)) {
-            throw new Error("The cloud task vault has an unsupported format.");
+          if (data && !isEncryptedTasks(data.tasks)) {
+            normalizePlannerState(data.tasks);
           }
           pendingVaultData = data ? data.tasks : null;
           pendingSyncUserId = userId;
@@ -1153,28 +1858,29 @@ with check ((select auth.uid()) = user_id);</pre>
           return;
         }
 
-        let remoteTasks = null;
+        let remoteState = null;
         let requiresEncryption = false;
         if (data && isEncryptedTasks(data.tasks)) {
           if (data.tasks.salt !== toBase64(vaultSalt)) {
             lockVaultForUnlock(data.tasks, userId);
             return;
           }
-          remoteTasks = await decryptTasks(data.tasks, vaultKey, userId);
-        } else if (data && Array.isArray(data.tasks)) {
-          remoteTasks = validCloudTasks(data.tasks);
-          requiresEncryption = true;
+          const decrypted = await decryptTasks(data.tasks, vaultKey, userId);
+          remoteState = decrypted.state;
+          requiresEncryption = decrypted.legacy;
         } else if (data) {
-          throw new Error("The cloud task vault has an unsupported format.");
+          const decoded = normalizePlannerState(data.tasks);
+          remoteState = decoded.state;
+          requiresEncryption = true;
         }
 
         if (!data) {
           const revisionAtWrite = localTaskRevision;
-          const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+          const committed = await writeCloudTasks(JSON.parse(JSON.stringify({ tasks, boards })), userId);
           if (!cloudUser || cloudUser.id !== userId) return;
-          applyCommittedTasks(committed, revisionAtWrite);
+          applyCommittedState(committed, revisionAtWrite);
         } else {
-          let nextTasks = remoteTasks;
+          let nextState = remoteState;
           let hasLocalChanges = requiresEncryption;
 
           let syncedUserId = null;
@@ -1185,16 +1891,16 @@ with check ((select auth.uid()) = user_id);</pre>
           }
 
           if (isFirstSync && syncedUserId !== userId) {
-            nextTasks = mergeTaskSets(tasks, remoteTasks);
-            hasLocalChanges = hasLocalChanges || !sameTaskSets(nextTasks, remoteTasks);
+            nextState = mergePlannerStates({ tasks, boards }, remoteState);
+            hasLocalChanges = hasLocalChanges || !samePlannerStates(nextState, remoteState);
           }
 
-          applySyncedTasks(nextTasks);
+          applySyncedState(nextState);
           if (hasLocalChanges) {
             const revisionAtWrite = localTaskRevision;
-            const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+            const committed = await writeCloudTasks(JSON.parse(JSON.stringify({ tasks, boards })), userId);
             if (!cloudUser || cloudUser.id !== userId) return;
-            applyCommittedTasks(committed, revisionAtWrite);
+            applyCommittedState(committed, revisionAtWrite);
           }
         }
         try {
@@ -1242,7 +1948,9 @@ with check ((select auth.uid()) = user_id);</pre>
           if (cloudUser && cloudUser.id === userId && vaultKey && vaultUserId === userId) startCloudPolling(userId);
         } catch (error) {
           console.error("Could not load synced Daylist tasks.", error);
-          setSyncStatus("Sync unavailable — check setup", true);
+          setSyncStatus(showVerificationFailure(error)
+            ? "Sync blocked — planner data failed verification"
+            : "Sync unavailable — check setup", true);
         } finally {
           if (syncingUserId === userId) syncingUserId = null;
         }
@@ -1255,7 +1963,9 @@ with check ((select auth.uid()) = user_id);</pre>
           const refresh = cloudDirty ? (queueCloudWrite(), Promise.resolve()) : syncFromCloud();
           refresh.catch(error => {
             console.error("Could not refresh synced Daylist tasks.", error);
-            setSyncStatus("Sync unavailable — retrying", true);
+            setSyncStatus(showVerificationFailure(error)
+              ? "Sync blocked — planner data failed verification"
+              : "Sync unavailable — retrying", true);
           });
         }, 30000);
       }
@@ -1322,21 +2032,28 @@ with check ((select auth.uid()) = user_id);</pre>
 
           let salt;
           let key;
-          let remoteTasks = null;
+          let remoteState = null;
+          let requiresEncryption = false;
           if (encryptedRecord) {
             salt = fromBase64(existingData.salt);
             key = await deriveVaultKey(passphrase, salt);
-            remoteTasks = await decryptTasks(existingData, key, userId);
+            const decrypted = await decryptTasks(existingData, key, userId);
+            remoteState = decrypted.state;
+            requiresEncryption = decrypted.legacy;
           } else {
             salt = window.crypto.getRandomValues(new Uint8Array(16));
             key = await deriveVaultKey(passphrase, salt);
-            if (Array.isArray(existingData)) remoteTasks = validCloudTasks(existingData);
+            if (existingData !== null && existingData !== undefined) {
+              const decoded = normalizePlannerState(existingData);
+              remoteState = decoded.state;
+              requiresEncryption = true;
+            }
           }
 
-          let nextTasks = tasks;
-          let hasLocalChanges = false;
-          if (remoteTasks !== null) {
-            nextTasks = remoteTasks;
+          let nextState = { tasks, boards };
+          let hasLocalChanges = requiresEncryption;
+          if (remoteState !== null) {
+            nextState = remoteState;
             if (pendingFirstSync) {
               let syncedUserId = null;
               try {
@@ -1345,34 +2062,35 @@ with check ((select auth.uid()) = user_id);</pre>
                 console.error("Could not read the Daylist sync marker.", storageError);
               }
               if (syncedUserId !== userId) {
-                nextTasks = mergeTaskSets(tasks, remoteTasks);
-                hasLocalChanges = !sameTaskSets(nextTasks, remoteTasks);
+                nextState = mergePlannerStates({ tasks, boards }, remoteState);
+                hasLocalChanges = hasLocalChanges || !samePlannerStates(nextState, remoteState);
               }
             }
             if (localTaskRevision !== revisionAtSubmit) {
-              nextTasks = mergeTaskSets(tasks, remoteTasks);
-              hasLocalChanges = !sameTaskSets(nextTasks, remoteTasks);
+              nextState = mergePlannerStates({ tasks, boards }, remoteState);
+              hasLocalChanges = hasLocalChanges || !samePlannerStates(nextState, remoteState);
             }
           }
 
           vaultKey = key;
           vaultSalt = salt;
           vaultUserId = userId;
-          tasks = nextTasks;
           remoteSyncing = true;
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-          } catch (storageError) {
-            console.error("Could not save synced Daylist tasks locally.", storageError);
+            tasks = nextState.tasks;
+            boards = nextState.boards;
+            if (!activeBoards().some(board => board.id === activeBoardId)) activeBoardId = DEFAULT_BOARD_ID;
+            persistLocalState();
+          } finally {
+            remoteSyncing = false;
           }
           render();
-          remoteSyncing = false;
 
-          if (!existingData || !encryptedRecord || hasLocalChanges) {
+          if (!existingData || requiresEncryption || hasLocalChanges) {
             const revisionAtWrite = localTaskRevision;
-            const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+            const committed = await writeCloudTasks(JSON.parse(JSON.stringify({ tasks, boards })), userId);
             if (!cloudUser || cloudUser.id !== userId) return;
-            applyCommittedTasks(committed, revisionAtWrite);
+            applyCommittedState(committed, revisionAtWrite);
           }
           try {
             localStorage.setItem(SYNCED_USER_KEY, userId);
@@ -1388,6 +2106,7 @@ with check ((select auth.uid()) = user_id);</pre>
         } catch (error) {
           remoteSyncing = false;
           console.error("Could not unlock or initialize the Daylist task vault.", error);
+          showVerificationFailure(error);
           setSyncStatus(error.message || "Could not unlock the task vault.", true);
         } finally {
           vaultSubmitButton.disabled = false;
@@ -1492,7 +2211,9 @@ with check ((select auth.uid()) = user_id);</pre>
         }
         syncFromCloud().catch(error => {
           console.error("Could not refresh synced Daylist tasks.", error);
-          setSyncStatus("Sync unavailable — retrying", true);
+          setSyncStatus(showVerificationFailure(error)
+            ? "Sync blocked — planner data failed verification"
+            : "Sync unavailable — retrying", true);
         });
       });
       window.addEventListener("online", () => {
@@ -1506,17 +2227,171 @@ with check ((select auth.uid()) = user_id);</pre>
           input.focus();
           return;
         }
-        const task = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, completed: false, updatedAt: 0, changeId: "", deletedAt: null };
+        if (tasks.length >= MAX_TASKS) {
+          setSyncStatus("This planner has reached the task limit.", true);
+          return;
+        }
+        const dueDate = document.querySelector("#new-task-due").value || null;
+        const recurrence = document.querySelector("#new-task-repeat").value;
+        if ((dueDate && !isValidDay(dueDate)) || !recurringOptions.has(recurrence)) {
+          setSyncStatus("The task details could not be verified.", true);
+          return;
+        }
+        let reminderAt;
+        try {
+          reminderAt = toReminderTimestamp(document.querySelector("#new-task-reminder").value);
+        } catch (error) {
+          setSyncStatus(error.message, true);
+          return;
+        }
+        const id = createId("task");
+        const task = {
+          id,
+          text,
+          completed: false,
+          boardId: activeBoardId,
+          dueDate,
+          recurrence,
+          seriesId: recurrence === "none" ? null : id,
+          seriesDay: recurrence === "none" ? null : Number((dueDate || todayString()).slice(-2)),
+          reminderAt,
+          updatedAt: 0,
+          changeId: "",
+          deletedAt: null
+        };
         stampTask(task);
         tasks.unshift(task);
         activeFilter = "all";
         saveTasks();
         render();
         input.value = "";
+        document.querySelector("#new-task-due").value = "";
+        document.querySelector("#new-task-repeat").value = "none";
+        document.querySelector("#new-task-reminder").value = "";
         input.focus();
       });
 
+      const REMINDER_HISTORY_KEY = "daylist-reminders-fired-v1";
+      let firedReminderKeys = new Set();
+      let reminderAlertTimer = null;
+
+      function loadReminderHistory() {
+        try {
+          const stored = localStorage.getItem(REMINDER_HISTORY_KEY);
+          if (stored === null) return new Set();
+          const parsed = JSON.parse(stored);
+          if (!Array.isArray(parsed) || parsed.length > 200 ||
+              parsed.some(value => typeof value !== "string" || value.length > 260)) {
+            throw new Error("Reminder history failed validation.");
+          }
+          return new Set(parsed);
+        } catch (error) {
+          console.error("Could not verify the Daylist reminder history.", error);
+          reminderHistoryWarning = true;
+          return new Set();
+        }
+      }
+
+      function updateReminderPermission() {
+        if (!("Notification" in window)) {
+          enableRemindersButton.textContent = "Browser notifications unavailable";
+          reminderStatus.textContent = "Your browser does not support notifications; reminders appear on this page while it is open.";
+          return;
+        }
+        if (window.Notification.permission === "granted") {
+          enableRemindersButton.textContent = "Browser reminders enabled";
+          reminderStatus.textContent = "Reminders notify only while this page is open; task text may appear outside Daylist.";
+        } else if (window.Notification.permission === "denied") {
+          enableRemindersButton.textContent = "Browser notifications blocked";
+          reminderStatus.textContent = "Notifications are blocked; due reminders will appear on this page while it is open.";
+        } else {
+          enableRemindersButton.textContent = "Enable browser reminders";
+          reminderStatus.textContent = "Reminders are optional and only work while this page is open. Notifications may display task text outside Daylist.";
+        }
+      }
+
+      function showReminderFallback(task) {
+        reminderAlert.textContent = `Reminder: ${task.text}${task.dueDate ? ` — due ${formatDay(task.dueDate)}` : ""}`;
+        reminderAlert.hidden = false;
+        reminderAlert.classList.add("alert");
+        if (reminderAlertTimer) window.clearTimeout(reminderAlertTimer);
+        reminderAlertTimer = window.setTimeout(() => {
+          reminderAlert.hidden = true;
+          reminderAlert.classList.remove("alert");
+        }, 15000);
+      }
+
+      function checkDueReminders() {
+        const now = Date.now();
+        for (const task of tasks) {
+          if (task.deletedAt !== null || task.completed || !task.reminderAt ||
+              Date.parse(task.reminderAt) > now) continue;
+          const reminderKey = `${task.id}:${task.reminderAt}`;
+          if (firedReminderKeys.has(reminderKey)) continue;
+          firedReminderKeys.add(reminderKey);
+          try {
+            const history = [...firedReminderKeys].slice(-200);
+            localStorage.setItem(REMINDER_HISTORY_KEY, JSON.stringify(history));
+            if (reminderHistoryWarning) {
+              reminderHistoryWarning = false;
+              updateDataTrustStatus();
+            }
+          } catch (error) {
+            console.error("Could not save the Daylist reminder history.", error);
+          }
+          if ("Notification" in window && window.Notification.permission === "granted") {
+            try {
+              const notice = new window.Notification("Daylist reminder", {
+                body: `${task.text}${task.dueDate ? ` — due ${formatDay(task.dueDate)}` : ""}`,
+                tag: reminderKey
+              });
+              notice.addEventListener("click", () => window.focus(), { once: true });
+            } catch (error) {
+              console.error("Could not show a Daylist browser reminder.", error);
+              showReminderFallback(task);
+            }
+          } else {
+            showReminderFallback(task);
+          }
+        }
+      }
+
+      enableRemindersButton.addEventListener("click", async () => {
+        if (!("Notification" in window)) {
+          updateReminderPermission();
+          return;
+        }
+        if (window.Notification.permission !== "granted") {
+          try {
+            await window.Notification.requestPermission();
+          } catch (error) {
+            console.error("Could not request Daylist notification permission.", error);
+            reminderStatus.textContent = "Notification permission could not be requested; on-page reminders remain available.";
+          }
+        }
+        updateReminderPermission();
+        checkDueReminders();
+      });
+
+      window.addEventListener("focus", checkDueReminders);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkDueReminders();
+      });
+      window.setInterval(checkDueReminders, 15000);
+
       render();
+      updateReminderPermission();
+      updateDataTrustStatus();
+      firedReminderKeys = loadReminderHistory();
+      updateDataTrustStatus();
+      if (initialPlanner.needsMigration) {
+        try {
+          persistLocalState();
+        } catch (error) {
+          console.error("Could not migrate existing Daylist tasks locally.", error);
+          setSyncStatus("Existing tasks loaded, but the local migration could not be saved.", true);
+        }
+      }
       showSyncView();
       try {
         const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
