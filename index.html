@@ -402,6 +402,16 @@
     .sync-details .sync-button { width: 100%; }
     .account-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .account-email { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+    .redirect-url {
+      display: block;
+      margin: 6px 0 9px;
+      padding: 9px;
+      overflow-wrap: anywhere;
+      border-radius: 8px;
+      background: var(--page);
+      color: var(--ink);
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
 
     @keyframes arrive {
       from { opacity: 0; transform: translateY(6px); }
@@ -467,7 +477,11 @@
         <span class="sync-state" id="sync-state" role="status" aria-live="polite">Local only</span>
       </div>
       <div id="setup-view">
-        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Your task list stays private to your account. Cloud sign-in needs this page on an HTTPS website; this local preview remains device-only.</p>
+        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Your task list stays private to your account.</p>
+        <p class="sync-copy" id="hosting-notice"></p>
+        <p class="sync-copy">In Supabase Authentication → URL Configuration, allow this exact redirect URL:</p>
+        <code class="redirect-url" id="redirect-url"></code>
+        <button class="sync-button" id="copy-redirect" type="button">Copy redirect URL</button>
         <form id="config-form">
           <input id="project-url" type="url" placeholder="Supabase project URL" aria-label="Supabase project URL" required>
           <input id="publishable-key" type="password" placeholder="Publishable (anon) key" aria-label="Supabase publishable key" required autocomplete="off">
@@ -531,6 +545,9 @@ with check ((select auth.uid()) = user_id);</pre>
       const authView = document.querySelector("#auth-view");
       const accountView = document.querySelector("#account-view");
       const configForm = document.querySelector("#config-form");
+      const hostingNotice = document.querySelector("#hosting-notice");
+      const redirectUrl = document.querySelector("#redirect-url");
+      const copyRedirectButton = document.querySelector("#copy-redirect");
       const projectUrlInput = document.querySelector("#project-url");
       const publishableKeyInput = document.querySelector("#publishable-key");
       const emailForm = document.querySelector("#email-form");
@@ -888,6 +905,26 @@ with check ((select auth.uid()) = user_id);</pre>
         } catch (error) {
           console.error("Could not copy the Supabase SQL.", error);
           setSyncStatus("Copy failed — select and copy the SQL manually", true);
+        }
+      });
+
+      const isHostedSecurely = window.location.protocol === "https:";
+      const currentRedirectUrl = window.location.href.split("#")[0];
+      hostingNotice.textContent = isHostedSecurely
+        ? "This page is hosted securely and ready for Supabase magic-link redirects."
+        : "Cloud sign-in requires HTTPS hosting. This local preview stays device-only.";
+      redirectUrl.textContent = isHostedSecurely
+        ? currentRedirectUrl
+        : "Available after this page is hosted over HTTPS.";
+      copyRedirectButton.disabled = !isHostedSecurely;
+      copyRedirectButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(currentRedirectUrl);
+          copyRedirectButton.textContent = "Copied";
+          window.setTimeout(() => { copyRedirectButton.textContent = "Copy redirect URL"; }, 1600);
+        } catch (error) {
+          console.error("Could not copy the Supabase redirect URL.", error);
+          setSyncStatus("Copy failed — select and copy the URL manually", true);
         }
       });
 
