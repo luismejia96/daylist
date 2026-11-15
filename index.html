@@ -174,6 +174,51 @@
       letter-spacing: 0;
     }
 
+    .progress-section { padding: 1px 19px 13px; }
+    .progress-copy { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; color: var(--muted); font-size: 12px; }
+    .progress-copy strong { color: var(--ink); font-weight: 600; }
+    .progress-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--soft); }
+    .progress-fill { width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width 420ms cubic-bezier(.2,.8,.2,1); }
+
+    .task-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 16px 10px;
+    }
+
+    .filter-group { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--page); }
+    .filter-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 31px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 550;
+      transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+    }
+    .filter-button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 8%); }
+    .filter-button:focus-visible, .clear-completed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .filter-count { color: var(--muted); font-size: 10px; }
+    .filter-button[aria-pressed="true"] .filter-count { color: var(--accent-dark); }
+    .clear-completed {
+      padding: 5px 2px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: color 160ms ease;
+    }
+    .clear-completed:hover { color: var(--danger); }
+
     .task-list {
       margin: 0;
       padding: 0 8px 8px;
@@ -256,7 +301,25 @@
 
     .task-row.completed .task-text { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 
-    .delete-button {
+    .task-edit-input {
+      flex: 1;
+      width: 100%;
+      min-width: 0;
+      height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      outline: none;
+      background: var(--page);
+      color: var(--ink);
+      font: inherit;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+
+    .task-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 1px; opacity: 0; transition: opacity 160ms ease; }
+    .task-row:hover .task-actions, .task-actions:focus-within { opacity: 1; }
+
+    .edit-button, .delete-button {
       display: grid;
       width: 34px;
       height: 34px;
@@ -267,15 +330,15 @@
       background: transparent;
       color: var(--muted);
       cursor: pointer;
-      opacity: 0;
       transition: background 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease;
     }
 
-    .task-row:hover .delete-button,
-    .delete-button:focus-visible { opacity: 1; }
+    .edit-button, .delete-button { opacity: .76; }
+    .edit-button:hover, .delete-button:hover { opacity: 1; transform: scale(1.06); }
+    .edit-button:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-dark); }
     .delete-button:hover { transform: scale(1.06); background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
-    .delete-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .delete-button svg { width: 17px; height: 17px; }
+    .edit-button:focus-visible, .delete-button:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+    .edit-button svg, .delete-button svg { width: 17px; height: 17px; }
 
     .empty-state {
       display: none;
@@ -421,7 +484,8 @@
     @media (max-width: 420px) {
       body { padding: 48px 15px 32px; }
       .task-row { min-height: 56px; }
-      .delete-button { opacity: .72; }
+      .task-actions { opacity: .82; }
+      .task-actions button { width: 31px; height: 31px; }
       .footer { font-size: 11px; }
     }
 
@@ -459,10 +523,27 @@
         <span>Today</span>
         <span class="task-count" id="task-count">0 tasks left</span>
       </div>
+      <div class="progress-section">
+        <div class="progress-copy">
+          <span id="progress-label">0 of 0 complete</span>
+          <strong id="progress-percent">0%</strong>
+        </div>
+        <div class="progress-track" id="progress-track" role="progressbar" aria-label="Task completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+      <div class="task-toolbar">
+        <div class="filter-group" role="group" aria-label="Filter tasks">
+          <button class="filter-button" type="button" data-filter="all" aria-pressed="true">All <span class="filter-count" id="all-count">0</span></button>
+          <button class="filter-button" type="button" data-filter="active" aria-pressed="false">Active <span class="filter-count" id="active-count">0</span></button>
+          <button class="filter-button" type="button" data-filter="completed" aria-pressed="false">Done <span class="filter-count" id="completed-count">0</span></button>
+        </div>
+        <button class="clear-completed" id="clear-completed" type="button" hidden>Clear done</button>
+      </div>
       <ul class="task-list" id="task-list" aria-label="Task list"></ul>
       <div class="empty-state" id="empty-state">
         <div class="empty-icon" aria-hidden="true">✳</div>
-        <div>Nothing on your list. Enjoy the breathing room.</div>
+        <div id="empty-message">Nothing on your list. Enjoy the breathing room.</div>
       </div>
       <footer class="footer">
         <span id="completion-summary"><strong>0 done</strong> so far</span>
@@ -540,6 +621,16 @@ with check ((select auth.uid()) = user_id);</pre>
       const count = document.querySelector("#task-count");
       const summary = document.querySelector("#completion-summary");
       const emptyState = document.querySelector("#empty-state");
+      const emptyMessage = document.querySelector("#empty-message");
+      const progressLabel = document.querySelector("#progress-label");
+      const progressPercent = document.querySelector("#progress-percent");
+      const progressTrack = document.querySelector("#progress-track");
+      const progressFill = document.querySelector("#progress-fill");
+      const allCount = document.querySelector("#all-count");
+      const activeCount = document.querySelector("#active-count");
+      const completedCount = document.querySelector("#completed-count");
+      const clearCompletedButton = document.querySelector("#clear-completed");
+      const filterButtons = [...document.querySelectorAll("[data-filter]")];
       const syncState = document.querySelector("#sync-state");
       const setupView = document.querySelector("#setup-view");
       const authView = document.querySelector("#auth-view");
@@ -560,6 +651,7 @@ with check ((select auth.uid()) = user_id);</pre>
       let remoteSyncing = false;
       let syncingUserId = null;
       let pollTimer = null;
+      let activeFilter = "all";
       let tasks = loadTasks();
 
       function loadTasks() {
@@ -609,18 +701,53 @@ with check ((select auth.uid()) = user_id);</pre>
         text.className = "task-text";
         text.textContent = task.text;
 
+        const actions = document.createElement("span");
+        actions.className = "task-actions";
+
+        const edit = document.createElement("button");
+        edit.className = "edit-button";
+        edit.type = "button";
+        edit.setAttribute("aria-label", `Edit "${task.text}"`);
+        edit.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m12.8 4.2 3 3m-10.9 8.6 3.2-.7L16.3 7a1.7 1.7 0 0 0-2.4-2.4L5.7 12.8l-.8 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
         const remove = document.createElement("button");
         remove.className = "delete-button";
         remove.type = "button";
         remove.setAttribute("aria-label", `Delete "${task.text}"`);
         remove.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 6h11M8 6V4.5h4V6m2.5 0-.6 9.5H6.1L5.5 6m2.8 2.5v4.5m3.4-4.5v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+        edit.addEventListener("click", () => {
+          const field = document.createElement("input");
+          field.className = "task-edit-input";
+          field.type = "text";
+          field.maxLength = 160;
+          field.value = task.text;
+          field.setAttribute("aria-label", `Edit task "${task.text}"`);
+          let finished = false;
+          const finishEditing = commit => {
+            if (finished) return;
+            finished = true;
+            const nextText = field.value.trim();
+            if (commit && nextText) {
+              task.text = nextText;
+              saveTasks();
+            }
+            render();
+          };
+          field.addEventListener("keydown", event => {
+            if (event.key === "Enter") finishEditing(true);
+            if (event.key === "Escape") finishEditing(false);
+          });
+          field.addEventListener("blur", () => finishEditing(true));
+          text.replaceWith(field);
+          field.focus();
+          field.select();
+        });
+
         checkbox.addEventListener("change", () => {
           task.completed = checkbox.checked;
-          row.classList.toggle("completed", task.completed);
-          checkbox.setAttribute("aria-label", `Mark "${task.text}" ${task.completed ? "not done" : "done"}`);
           saveTasks();
-          updateSummary();
+          render();
         });
 
         remove.addEventListener("click", () => {
@@ -633,22 +760,63 @@ with check ((select auth.uid()) = user_id);</pre>
           }, { once: true });
         });
 
-        row.append(checkWrap, text, remove);
+        actions.append(edit, remove);
+        row.append(checkWrap, text, actions);
         return row;
+      }
+
+      function filteredTasks() {
+        if (activeFilter === "active") return tasks.filter(task => !task.completed);
+        if (activeFilter === "completed") return tasks.filter(task => task.completed);
+        return tasks;
       }
 
       function updateSummary() {
         const remaining = tasks.filter(task => !task.completed).length;
         const completed = tasks.length - remaining;
+        const percentage = tasks.length ? Math.round(completed / tasks.length * 100) : 0;
+        const visibleTasks = filteredTasks();
         count.textContent = `${remaining} ${remaining === 1 ? "task" : "tasks"} left`;
-        summary.innerHTML = `<strong>${completed} ${completed === 1 ? "done" : "done"}</strong> so far`;
-        emptyState.classList.toggle("visible", tasks.length === 0);
+        summary.innerHTML = `<strong>${completed} done</strong> so far`;
+        allCount.textContent = tasks.length;
+        activeCount.textContent = remaining;
+        completedCount.textContent = completed;
+        progressLabel.textContent = `${completed} of ${tasks.length} complete`;
+        progressPercent.textContent = `${percentage}%`;
+        progressTrack.setAttribute("aria-valuenow", percentage);
+        progressFill.style.width = `${percentage}%`;
+        clearCompletedButton.hidden = completed === 0;
+        filterButtons.forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.filter === activeFilter));
+        });
+        if (tasks.length === 0) {
+          emptyMessage.textContent = "Nothing on your list. Enjoy the breathing room.";
+        } else if (activeFilter === "active") {
+          emptyMessage.textContent = "You’re all caught up. Nice work.";
+        } else {
+          emptyMessage.textContent = "No completed tasks yet. Keep going.";
+        }
+        emptyState.classList.toggle("visible", visibleTasks.length === 0);
       }
 
       function render() {
-        list.replaceChildren(...tasks.map(createTaskRow));
+        list.replaceChildren(...filteredTasks().map(createTaskRow));
         updateSummary();
       }
+
+      filterButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          activeFilter = button.dataset.filter;
+          render();
+        });
+      });
+
+      clearCompletedButton.addEventListener("click", () => {
+        tasks = tasks.filter(task => !task.completed);
+        activeFilter = "all";
+        saveTasks();
+        render();
+      });
 
       function setSyncStatus(message, isError = false) {
         syncState.textContent = message;
@@ -951,6 +1119,7 @@ with check ((select auth.uid()) = user_id);</pre>
           return;
         }
         tasks.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, completed: false });
+        activeFilter = "all";
         saveTasks();
         render();
         input.value = "";
