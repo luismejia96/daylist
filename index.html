@@ -100,6 +100,7 @@
       background: var(--surface);
       box-shadow: var(--shadow);
     }
+    .card.locked { opacity: .62; }
 
     form {
       display: flex;
@@ -558,7 +559,7 @@
         <span class="sync-state" id="sync-state" role="status" aria-live="polite">Local only</span>
       </div>
       <div id="setup-view">
-        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Your task list stays private to your account.</p>
+        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Task content is encrypted in this browser before upload, and Supabase row-level security isolates each account.</p>
         <p class="sync-copy" id="hosting-notice"></p>
         <p class="sync-copy">In Supabase Authentication → URL Configuration, allow this exact redirect URL:</p>
         <code class="redirect-url" id="redirect-url"></code>
@@ -578,6 +579,7 @@
 );
 
 alter table public.daylist_lists enable row level security;
+grant select, insert, update, delete on public.daylist_lists to authenticated;
 
 drop policy if exists "Users manage own Daylist" on public.daylist_lists;
 create policy "Users manage own Daylist"
@@ -595,6 +597,15 @@ with check ((select auth.uid()) = user_id);</pre>
           <button class="sync-button" id="disconnect-project" type="button">Change Supabase project</button>
         </form>
       </div>
+      <div id="vault-view" hidden>
+        <p class="sync-copy" id="vault-copy"></p>
+        <form id="vault-form">
+          <input id="vault-passphrase" type="password" maxlength="256" placeholder="Private sync passphrase" aria-label="Private sync passphrase" required autocomplete="current-password">
+          <button class="sync-button" id="vault-submit" type="submit">Unlock task vault</button>
+        </form>
+        <p class="sync-copy">The passphrase is never sent to Supabase. Use it on each device; it cannot be reset. Your browser keeps a local copy, which Daylist does not encrypt. The site code and your device must still be trusted.</p>
+        <button class="sync-button" id="vault-sign-out" type="button">Sign out</button>
+      </div>
       <div id="account-view" hidden>
         <div class="account-row">
           <span class="account-email" id="account-email"></span>
@@ -604,18 +615,19 @@ with check ((select auth.uid()) = user_id);</pre>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     (() => {
       const STORAGE_KEY = "daylist-tasks-v1";
       const CONFIG_KEY = "daylist-supabase-config-v1";
       const SYNCED_USER_KEY = "daylist-synced-user-v1";
       const starterTasks = [
-        { id: "welcome-plan", text: "Plan the week ahead", completed: true },
-        { id: "welcome-walk", text: "Take a walk and get some fresh air", completed: false },
-        { id: "welcome-inbox", text: "Clear out a few emails", completed: false }
+        { id: "welcome-plan", text: "Plan the week ahead", completed: true, updatedAt: 0, changeId: "legacy" },
+        { id: "welcome-walk", text: "Take a walk and get some fresh air", completed: false, updatedAt: 0, changeId: "legacy" },
+        { id: "welcome-inbox", text: "Clear out a few emails", completed: false, updatedAt: 0, changeId: "legacy" }
       ];
       const list = document.querySelector("#task-list");
+      const taskCard = document.querySelector(".card");
       const form = document.querySelector("#task-form");
       const input = document.querySelector("#new-task");
       const count = document.querySelector("#task-count");
@@ -634,6 +646,7 @@ with check ((select auth.uid()) = user_id);</pre>
       const syncState = document.querySelector("#sync-state");
       const setupView = document.querySelector("#setup-view");
       const authView = document.querySelector("#auth-view");
+      const vaultView = document.querySelector("#vault-view");
       const accountView = document.querySelector("#account-view");
       const configForm = document.querySelector("#config-form");
       const hostingNotice = document.querySelector("#hosting-notice");
@@ -644,39 +657,113 @@ with check ((select auth.uid()) = user_id);</pre>
       const emailForm = document.querySelector("#email-form");
       const emailInput = document.querySelector("#email-address");
       const sendLinkButton = document.querySelector("#send-link");
+      const vaultForm = document.querySelector("#vault-form");
+      const vaultCopy = document.querySelector("#vault-copy");
+      const vaultPassphraseInput = document.querySelector("#vault-passphrase");
+      const vaultSubmitButton = document.querySelector("#vault-submit");
       let supabaseClient = null;
       let cloudUser = null;
+      let vaultKey = null;
+      let vaultSalt = null;
+      let vaultUserId = null;
+      let pendingVaultData = null;
+      let pendingSyncUserId = null;
+      let pendingFirstSync = false;
+      let vaultMode = "create";
       let cloudDirty = false;
       let cloudWriteChain = Promise.resolve();
       let remoteSyncing = false;
       let syncingUserId = null;
       let pollTimer = null;
       let activeFilter = "all";
+      let localTaskRevision = 0;
       let tasks = loadTasks();
+
+      function normalizeTask(task) {
+        return {
+          id: task.id,
+          text: task.text,
+          completed: task.completed,
+          updatedAt: Number.isFinite(task.updatedAt) ? task.updatedAt : 0,
+          changeId: typeof task.changeId === "string" ? task.changeId : "legacy",
+          deletedAt: Number.isFinite(task.deletedAt) ? task.deletedAt : null
+        };
+      }
+
+      function stampTask(task) {
+        task.updatedAt = Date.now();
+        task.changeId = `${task.updatedAt}-${Math.random().toString(36).slice(2)}`;
+      }
+
+      function activeTasks() {
+        return tasks.filter(task => task.deletedAt === null);
+      }
+
+      function mergeTaskSets(localTasks, remoteTasks) {
+        const merged = new Map(localTasks.map(task => [task.id, task]));
+        for (const remoteTask of remoteTasks) {
+          const localTask = merged.get(remoteTask.id);
+          if (!localTask ||
+              remoteTask.updatedAt > localTask.updatedAt ||
+              (remoteTask.updatedAt === localTask.updatedAt &&
+                remoteTask.changeId.localeCompare(localTask.changeId) >= 0)) {
+            merged.set(remoteTask.id, remoteTask);
+          }
+        }
+        return [...merged.values()];
+      }
+
+      function sameTaskSets(first, second) {
+        if (first.length !== second.length) return false;
+        const secondById = new Map(second.map(task => [task.id, task]));
+        return first.every(task => JSON.stringify(task) === JSON.stringify(secondById.get(task.id)));
+      }
 
       function loadTasks() {
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved === null) return starterTasks.map(task => ({ ...task }));
+          if (saved === null) return starterTasks.map(normalizeTask);
           const parsed = JSON.parse(saved);
           if (!Array.isArray(parsed)) throw new Error("Saved tasks must be an array.");
           return parsed.filter(task =>
             task && typeof task.id === "string" &&
             typeof task.text === "string" && typeof task.completed === "boolean"
-          );
+          ).map(normalizeTask);
         } catch (error) {
           console.error("Could not load Daylist tasks from localStorage.", error);
-          return starterTasks.map(task => ({ ...task }));
+          return starterTasks.map(normalizeTask);
         }
       }
 
       function saveTasks() {
+        localTaskRevision += 1;
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
         } catch (error) {
           console.error("Could not save Daylist tasks to localStorage.", error);
         }
-        if (cloudUser && !remoteSyncing) queueCloudWrite();
+        if (cloudUser && !remoteSyncing && vaultKey && vaultUserId === cloudUser.id) {
+          queueCloudWrite();
+        }
+      }
+
+      function applySyncedTasks(nextTasks) {
+        remoteSyncing = true;
+        tasks = nextTasks;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        } catch (error) {
+          console.error("Could not save synced Daylist tasks locally.", error);
+        } finally {
+          remoteSyncing = false;
+        }
+        render();
+      }
+
+      function applyCommittedTasks(committedTasks, revisionAtStart) {
+        const unchanged = localTaskRevision === revisionAtStart;
+        applySyncedTasks(unchanged ? committedTasks : mergeTaskSets(tasks, committedTasks));
+        return unchanged;
       }
 
       function createTaskRow(task) {
@@ -730,6 +817,7 @@ with check ((select auth.uid()) = user_id);</pre>
             const nextText = field.value.trim();
             if (commit && nextText) {
               task.text = nextText;
+              stampTask(task);
               saveTasks();
             }
             render();
@@ -746,6 +834,7 @@ with check ((select auth.uid()) = user_id);</pre>
 
         checkbox.addEventListener("change", () => {
           task.completed = checkbox.checked;
+          stampTask(task);
           saveTasks();
           render();
         });
@@ -754,7 +843,8 @@ with check ((select auth.uid()) = user_id);</pre>
           row.classList.add("removing");
           row.addEventListener("transitionend", event => {
             if (event.propertyName !== "opacity") return;
-            tasks = tasks.filter(item => item.id !== task.id);
+            task.deletedAt = Date.now();
+            stampTask(task);
             saveTasks();
             render();
           }, { once: true });
@@ -766,22 +856,24 @@ with check ((select auth.uid()) = user_id);</pre>
       }
 
       function filteredTasks() {
-        if (activeFilter === "active") return tasks.filter(task => !task.completed);
-        if (activeFilter === "completed") return tasks.filter(task => task.completed);
-        return tasks;
+        const visible = activeTasks();
+        if (activeFilter === "active") return visible.filter(task => !task.completed);
+        if (activeFilter === "completed") return visible.filter(task => task.completed);
+        return visible;
       }
 
       function updateSummary() {
-        const remaining = tasks.filter(task => !task.completed).length;
-        const completed = tasks.length - remaining;
-        const percentage = tasks.length ? Math.round(completed / tasks.length * 100) : 0;
+        const visible = activeTasks();
+        const remaining = visible.filter(task => !task.completed).length;
+        const completed = visible.length - remaining;
+        const percentage = visible.length ? Math.round(completed / visible.length * 100) : 0;
         const visibleTasks = filteredTasks();
         count.textContent = `${remaining} ${remaining === 1 ? "task" : "tasks"} left`;
         summary.innerHTML = `<strong>${completed} done</strong> so far`;
-        allCount.textContent = tasks.length;
+        allCount.textContent = visible.length;
         activeCount.textContent = remaining;
         completedCount.textContent = completed;
-        progressLabel.textContent = `${completed} of ${tasks.length} complete`;
+        progressLabel.textContent = `${completed} of ${visible.length} complete`;
         progressPercent.textContent = `${percentage}%`;
         progressTrack.setAttribute("aria-valuenow", percentage);
         progressFill.style.width = `${percentage}%`;
@@ -789,7 +881,7 @@ with check ((select auth.uid()) = user_id);</pre>
         filterButtons.forEach(button => {
           button.setAttribute("aria-pressed", String(button.dataset.filter === activeFilter));
         });
-        if (tasks.length === 0) {
+        if (visible.length === 0) {
           emptyMessage.textContent = "Nothing on your list. Enjoy the breathing room.";
         } else if (activeFilter === "active") {
           emptyMessage.textContent = "You’re all caught up. Nice work.";
@@ -812,7 +904,11 @@ with check ((select auth.uid()) = user_id);</pre>
       });
 
       clearCompletedButton.addEventListener("click", () => {
-        tasks = tasks.filter(task => !task.completed);
+        const removedAt = Date.now();
+        activeTasks().filter(task => task.completed).forEach(task => {
+          task.deletedAt = removedAt;
+          stampTask(task);
+        });
         activeFilter = "all";
         saveTasks();
         render();
@@ -825,11 +921,30 @@ with check ((select auth.uid()) = user_id);</pre>
 
       function showSyncView() {
         const configured = Boolean(supabaseClient);
+        const unlocked = Boolean(cloudUser && vaultKey && vaultUserId === cloudUser.id);
         setupView.hidden = configured;
         authView.hidden = !configured || Boolean(cloudUser);
-        accountView.hidden = !cloudUser;
+        vaultView.hidden = !cloudUser || unlocked;
+        accountView.hidden = !unlocked;
+        taskCard.inert = Boolean(cloudUser && !unlocked);
+        taskCard.classList.toggle("locked", Boolean(cloudUser && !unlocked));
         if (cloudUser) {
           document.querySelector("#account-email").textContent = cloudUser.email || "Signed in";
+        }
+        if (cloudUser && !unlocked) {
+          if (vaultMode === "create") {
+            vaultCopy.textContent = "Create a private sync passphrase to encrypt your tasks before they leave this device. Use at least 14 characters.";
+            vaultPassphraseInput.autocomplete = "new-password";
+            vaultSubmitButton.textContent = "Create encrypted vault";
+          } else if (vaultMode === "migrate") {
+            vaultCopy.textContent = "This account has an older unencrypted cloud list. Create a private passphrase to encrypt it before continuing.";
+            vaultPassphraseInput.autocomplete = "new-password";
+            vaultSubmitButton.textContent = "Encrypt and unlock";
+          } else {
+            vaultCopy.textContent = "Unlock your encrypted task list with the private passphrase you created on another device.";
+            vaultPassphraseInput.autocomplete = "current-password";
+            vaultSubmitButton.textContent = "Unlock task vault";
+          }
         }
       }
 
@@ -837,38 +952,170 @@ with check ((select auth.uid()) = user_id);</pre>
         return Array.isArray(value) ? value.filter(task =>
           task && typeof task.id === "string" &&
           typeof task.text === "string" && typeof task.completed === "boolean"
-        ) : [];
+        ).map(normalizeTask) : [];
+      }
+
+      function isEncryptedTasks(value) {
+        return value && value.version === 1 && value.algorithm === "AES-GCM" &&
+          typeof value.salt === "string" && typeof value.iv === "string" &&
+          typeof value.ciphertext === "string";
+      }
+
+      function toBase64(bytes) {
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+        }
+        return btoa(binary);
+      }
+
+      function fromBase64(value) {
+        return Uint8Array.from(atob(value), character => character.charCodeAt(0));
+      }
+
+      async function deriveVaultKey(passphrase, salt) {
+        if (!window.crypto || !window.crypto.subtle) {
+          throw new Error("This browser does not support secure task encryption.");
+        }
+        const material = await window.crypto.subtle.importKey(
+          "raw",
+          new TextEncoder().encode(passphrase),
+          "PBKDF2",
+          false,
+          ["deriveKey"]
+        );
+        return window.crypto.subtle.deriveKey(
+          { name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" },
+          material,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt", "decrypt"]
+        );
+      }
+
+      async function encryptTasks(value, key, salt, userId) {
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const ciphertext = await window.crypto.subtle.encrypt(
+          { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(userId) },
+          key,
+          new TextEncoder().encode(JSON.stringify(value))
+        );
+        return {
+          version: 1,
+          algorithm: "AES-GCM",
+          salt: toBase64(salt),
+          iv: toBase64(iv),
+          ciphertext: toBase64(new Uint8Array(ciphertext))
+        };
+      }
+
+      async function decryptTasks(envelope, key, userId) {
+        try {
+          const plaintext = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: fromBase64(envelope.iv), additionalData: new TextEncoder().encode(userId) },
+            key,
+            fromBase64(envelope.ciphertext)
+          );
+          const tasksFromVault = JSON.parse(new TextDecoder().decode(plaintext));
+          if (!Array.isArray(tasksFromVault)) throw new Error("Invalid task vault data.");
+          return validCloudTasks(tasksFromVault);
+        } catch (_error) {
+          throw new Error("That passphrase could not unlock this task list.");
+        }
+      }
+
+      function lockVaultForUnlock(encryptedData, userId) {
+        vaultKey = null;
+        vaultSalt = null;
+        vaultUserId = null;
+        pendingVaultData = encryptedData;
+        pendingSyncUserId = userId;
+        pendingFirstSync = false;
+        vaultMode = "unlock";
+        showSyncView();
+        setSyncStatus("The task vault changed. Unlock it again to continue.", true);
       }
 
       async function writeCloudTasks(snapshot, userId = cloudUser && cloudUser.id) {
-        if (!supabaseClient || !userId) return;
-        const { error } = await supabaseClient
-          .from("daylist_lists")
-          .upsert({
-            user_id: userId,
-            tasks: snapshot,
-            updated_at: new Date().toISOString()
-          }, { onConflict: "user_id" });
-        if (error) throw error;
+        if (!supabaseClient || !userId || !vaultKey || vaultUserId !== userId) return;
+        let candidate = snapshot;
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          const { data, error } = await supabaseClient
+            .from("daylist_lists")
+            .select("tasks, updated_at")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (error) throw error;
+
+          let remoteTasks = [];
+          if (data && isEncryptedTasks(data.tasks)) {
+            if (data.tasks.salt !== toBase64(vaultSalt)) {
+              const changedError = new Error("The encrypted task vault changed.");
+              changedError.name = "VaultChangedError";
+              changedError.encryptedData = data.tasks;
+              throw changedError;
+            }
+            remoteTasks = await decryptTasks(data.tasks, vaultKey, userId);
+          } else if (data && Array.isArray(data.tasks)) {
+            remoteTasks = validCloudTasks(data.tasks);
+          } else if (data) {
+            throw new Error("The cloud task vault has an unsupported format.");
+          }
+
+          candidate = mergeTaskSets(candidate, remoteTasks);
+          const encryptedTasks = await encryptTasks(candidate, vaultKey, vaultSalt, userId);
+          const updatedAt = new Date(Math.max(
+            Date.now(),
+            data ? Date.parse(data.updated_at) + 1 : 0
+          )).toISOString();
+
+          if (data) {
+            const { data: updatedRows, error: updateError } = await supabaseClient
+              .from("daylist_lists")
+              .update({ tasks: encryptedTasks, updated_at: updatedAt })
+              .eq("user_id", userId)
+              .eq("updated_at", data.updated_at)
+              .select("user_id");
+            if (updateError) throw updateError;
+            if (updatedRows && updatedRows.length) return candidate;
+          } else {
+            const { error: insertError } = await supabaseClient
+              .from("daylist_lists")
+              .insert({ user_id: userId, tasks: encryptedTasks, updated_at: updatedAt });
+            if (!insertError) return candidate;
+            if (insertError.code !== "23505") throw insertError;
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 20 * (attempt + 1)));
+        }
+        throw new Error("The task list changed repeatedly while syncing. Please try again.");
       }
 
       function queueCloudWrite() {
+        if (!cloudUser || !vaultKey || vaultUserId !== cloudUser.id) return;
         cloudDirty = true;
+        const userId = cloudUser.id;
         cloudWriteChain = cloudWriteChain.catch(() => {}).then(async () => {
-          if (!cloudUser) return;
-          const userId = cloudUser.id;
+          if (!cloudUser || !vaultKey || vaultUserId !== cloudUser.id) return;
+          const revisionAtStart = localTaskRevision;
           const snapshot = JSON.parse(JSON.stringify(tasks));
-          await writeCloudTasks(snapshot, userId);
-          if (cloudUser && cloudUser.id === userId && JSON.stringify(tasks) === JSON.stringify(snapshot)) {
+          const committed = await writeCloudTasks(snapshot, userId);
+          if (!cloudUser || cloudUser.id !== userId || vaultUserId !== userId) return;
+          const unchanged = applyCommittedTasks(committed, revisionAtStart);
+          if (unchanged) {
             cloudDirty = false;
             try {
               localStorage.setItem(SYNCED_USER_KEY, userId);
             } catch (error) {
               console.error("Could not save the Daylist sync marker.", error);
             }
-            setSyncStatus("Synced");
+            setSyncStatus("Synced — end-to-end encrypted");
           }
         }).catch(error => {
+          if (error.name === "VaultChangedError" && cloudUser && cloudUser.id === userId) {
+            cloudDirty = false;
+            lockVaultForUnlock(error.encryptedData, userId);
+            return;
+          }
           cloudDirty = true;
           console.error("Could not sync Daylist tasks.", error);
           setSyncStatus("Offline — saved on this device", true);
@@ -880,6 +1127,7 @@ with check ((select auth.uid()) = user_id);</pre>
         if (!cloudUser || !supabaseClient || cloudDirty) return;
         setSyncStatus("Syncing…");
         const userId = cloudUser.id;
+        const revisionAtStart = localTaskRevision;
         const { data, error } = await supabaseClient
           .from("daylist_lists")
           .select("tasks")
@@ -887,17 +1135,47 @@ with check ((select auth.uid()) = user_id);</pre>
           .maybeSingle();
         if (error) throw error;
 
-        if (!data) {
-          await writeCloudTasks(tasks, userId);
-          try {
-            localStorage.setItem(SYNCED_USER_KEY, userId);
-          } catch (storageError) {
-            console.error("Could not save the Daylist sync marker.", storageError);
+        if (localTaskRevision !== revisionAtStart) {
+          queueCloudWrite();
+          return;
+        }
+
+        if (!vaultKey || vaultUserId !== userId) {
+          if (data && !isEncryptedTasks(data.tasks) && !Array.isArray(data.tasks)) {
+            throw new Error("The cloud task vault has an unsupported format.");
           }
+          pendingVaultData = data ? data.tasks : null;
+          pendingSyncUserId = userId;
+          pendingFirstSync = isFirstSync;
+          vaultMode = !data ? "create" : isEncryptedTasks(data.tasks) ? "unlock" : "migrate";
+          showSyncView();
+          setSyncStatus(vaultMode === "create" ? "Create your encrypted task vault" : "Unlock your encrypted task vault");
+          return;
+        }
+
+        let remoteTasks = null;
+        let requiresEncryption = false;
+        if (data && isEncryptedTasks(data.tasks)) {
+          if (data.tasks.salt !== toBase64(vaultSalt)) {
+            lockVaultForUnlock(data.tasks, userId);
+            return;
+          }
+          remoteTasks = await decryptTasks(data.tasks, vaultKey, userId);
+        } else if (data && Array.isArray(data.tasks)) {
+          remoteTasks = validCloudTasks(data.tasks);
+          requiresEncryption = true;
+        } else if (data) {
+          throw new Error("The cloud task vault has an unsupported format.");
+        }
+
+        if (!data) {
+          const revisionAtWrite = localTaskRevision;
+          const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+          if (!cloudUser || cloudUser.id !== userId) return;
+          applyCommittedTasks(committed, revisionAtWrite);
         } else {
-          const remoteTasks = validCloudTasks(data.tasks);
           let nextTasks = remoteTasks;
-          let hasLocalChanges = false;
+          let hasLocalChanges = requiresEncryption;
 
           let syncedUserId = null;
           try {
@@ -907,67 +1185,79 @@ with check ((select auth.uid()) = user_id);</pre>
           }
 
           if (isFirstSync && syncedUserId !== userId) {
-            const merged = new Map(tasks.map(task => [task.id, task]));
-            for (const task of remoteTasks) merged.set(task.id, task);
-            nextTasks = [...merged.values()];
-            hasLocalChanges = nextTasks.length !== remoteTasks.length ||
-              nextTasks.some((task, index) => JSON.stringify(task) !== JSON.stringify(remoteTasks[index]));
+            nextTasks = mergeTaskSets(tasks, remoteTasks);
+            hasLocalChanges = hasLocalChanges || !sameTaskSets(nextTasks, remoteTasks);
           }
 
-          remoteSyncing = true;
-          tasks = nextTasks;
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-          } catch (storageError) {
-            console.error("Could not save synced Daylist tasks locally.", storageError);
-          }
-          render();
-          remoteSyncing = false;
-          if (hasLocalChanges) await writeCloudTasks(tasks, userId);
-          try {
-            localStorage.setItem(SYNCED_USER_KEY, userId);
-          } catch (storageError) {
-            console.error("Could not save the Daylist sync marker.", storageError);
+          applySyncedTasks(nextTasks);
+          if (hasLocalChanges) {
+            const revisionAtWrite = localTaskRevision;
+            const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+            if (!cloudUser || cloudUser.id !== userId) return;
+            applyCommittedTasks(committed, revisionAtWrite);
           }
         }
-        if (cloudUser && cloudUser.id === userId) setSyncStatus("Synced");
+        try {
+          localStorage.setItem(SYNCED_USER_KEY, userId);
+        } catch (storageError) {
+          console.error("Could not save the Daylist sync marker.", storageError);
+        }
+        if (cloudUser && cloudUser.id === userId) setSyncStatus("Synced — end-to-end encrypted");
       }
 
       async function handleAuthSession(session) {
         const previousUserId = cloudUser && cloudUser.id;
         cloudUser = session && session.user ? session.user : null;
-        showSyncView();
 
         if (!cloudUser) {
+          vaultKey = null;
+          vaultSalt = null;
+          vaultUserId = null;
+          pendingVaultData = null;
+          pendingSyncUserId = null;
           cloudDirty = false;
           if (pollTimer) window.clearInterval(pollTimer);
           pollTimer = null;
+          showSyncView();
           if (supabaseClient) setSyncStatus("Connected — sign in to sync");
           return;
         }
 
+        if (previousUserId && previousUserId !== cloudUser.id) {
+          vaultKey = null;
+          vaultSalt = null;
+          vaultUserId = null;
+          pendingVaultData = null;
+          pendingSyncUserId = null;
+          cloudDirty = false;
+        }
+        showSyncView();
         if (previousUserId === cloudUser.id && pollTimer) return;
-        if (previousUserId && previousUserId !== cloudUser.id) cloudDirty = false;
         if (syncingUserId === cloudUser.id) return;
         if (pollTimer) window.clearInterval(pollTimer);
         const userId = cloudUser.id;
         syncingUserId = userId;
         try {
           await syncFromCloud(true);
-          if (cloudUser && cloudUser.id === userId) {
-            pollTimer = window.setInterval(() => {
-              syncFromCloud().catch(error => {
-                console.error("Could not refresh synced Daylist tasks.", error);
-                setSyncStatus("Sync unavailable — retrying", true);
-              });
-            }, 30000);
-          }
+          if (cloudUser && cloudUser.id === userId && vaultKey && vaultUserId === userId) startCloudPolling(userId);
         } catch (error) {
           console.error("Could not load synced Daylist tasks.", error);
           setSyncStatus("Sync unavailable — check setup", true);
         } finally {
           if (syncingUserId === userId) syncingUserId = null;
         }
+      }
+
+      function startCloudPolling(userId) {
+        if (pollTimer) window.clearInterval(pollTimer);
+        pollTimer = window.setInterval(() => {
+          if (!cloudUser || cloudUser.id !== userId || !vaultKey) return;
+          const refresh = cloudDirty ? (queueCloudWrite(), Promise.resolve()) : syncFromCloud();
+          refresh.catch(error => {
+            console.error("Could not refresh synced Daylist tasks.", error);
+            setSyncStatus("Sync unavailable — retrying", true);
+          });
+        }, 30000);
       }
 
       async function connectSupabase(config) {
@@ -1014,6 +1304,96 @@ with check ((select auth.uid()) = user_id);</pre>
         }
       });
 
+      vaultForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (!cloudUser || pendingSyncUserId !== cloudUser.id) return;
+        const userId = cloudUser.id;
+        const passphrase = vaultPassphraseInput.value;
+        const existingData = pendingVaultData;
+        const encryptedRecord = isEncryptedTasks(existingData);
+        const revisionAtSubmit = localTaskRevision;
+        vaultSubmitButton.disabled = true;
+        setSyncStatus(encryptedRecord ? "Unlocking your private task vault…" : "Creating your encrypted task vault…");
+
+        try {
+          if (!encryptedRecord && passphrase.length < 14) {
+            throw new Error("Choose a passphrase with at least 14 characters.");
+          }
+
+          let salt;
+          let key;
+          let remoteTasks = null;
+          if (encryptedRecord) {
+            salt = fromBase64(existingData.salt);
+            key = await deriveVaultKey(passphrase, salt);
+            remoteTasks = await decryptTasks(existingData, key, userId);
+          } else {
+            salt = window.crypto.getRandomValues(new Uint8Array(16));
+            key = await deriveVaultKey(passphrase, salt);
+            if (Array.isArray(existingData)) remoteTasks = validCloudTasks(existingData);
+          }
+
+          let nextTasks = tasks;
+          let hasLocalChanges = false;
+          if (remoteTasks !== null) {
+            nextTasks = remoteTasks;
+            if (pendingFirstSync) {
+              let syncedUserId = null;
+              try {
+                syncedUserId = localStorage.getItem(SYNCED_USER_KEY);
+              } catch (storageError) {
+                console.error("Could not read the Daylist sync marker.", storageError);
+              }
+              if (syncedUserId !== userId) {
+                nextTasks = mergeTaskSets(tasks, remoteTasks);
+                hasLocalChanges = !sameTaskSets(nextTasks, remoteTasks);
+              }
+            }
+            if (localTaskRevision !== revisionAtSubmit) {
+              nextTasks = mergeTaskSets(tasks, remoteTasks);
+              hasLocalChanges = !sameTaskSets(nextTasks, remoteTasks);
+            }
+          }
+
+          vaultKey = key;
+          vaultSalt = salt;
+          vaultUserId = userId;
+          tasks = nextTasks;
+          remoteSyncing = true;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          } catch (storageError) {
+            console.error("Could not save synced Daylist tasks locally.", storageError);
+          }
+          render();
+          remoteSyncing = false;
+
+          if (!existingData || !encryptedRecord || hasLocalChanges) {
+            const revisionAtWrite = localTaskRevision;
+            const committed = await writeCloudTasks(JSON.parse(JSON.stringify(tasks)), userId);
+            if (!cloudUser || cloudUser.id !== userId) return;
+            applyCommittedTasks(committed, revisionAtWrite);
+          }
+          try {
+            localStorage.setItem(SYNCED_USER_KEY, userId);
+          } catch (storageError) {
+            console.error("Could not save the Daylist sync marker.", storageError);
+          }
+          pendingVaultData = null;
+          pendingSyncUserId = null;
+          vaultPassphraseInput.value = "";
+          showSyncView();
+          setSyncStatus(cloudDirty ? "Syncing…" : "Synced — end-to-end encrypted");
+          startCloudPolling(userId);
+        } catch (error) {
+          remoteSyncing = false;
+          console.error("Could not unlock or initialize the Daylist task vault.", error);
+          setSyncStatus(error.message || "Could not unlock the task vault.", true);
+        } finally {
+          vaultSubmitButton.disabled = false;
+        }
+      });
+
       emailForm.addEventListener("submit", async event => {
         event.preventDefault();
         if (!supabaseClient) return;
@@ -1034,7 +1414,7 @@ with check ((select auth.uid()) = user_id);</pre>
         }
       });
 
-      document.querySelector("#sign-out").addEventListener("click", async () => {
+      const signOut = async () => {
         if (!supabaseClient) return;
         try {
           const { error } = await supabaseClient.auth.signOut();
@@ -1044,7 +1424,9 @@ with check ((select auth.uid()) = user_id);</pre>
           console.error("Could not sign out of Daylist.", error);
           setSyncStatus(error.message || "Could not sign out.", true);
         }
-      });
+      };
+      document.querySelector("#sign-out").addEventListener("click", signOut);
+      document.querySelector("#vault-sign-out").addEventListener("click", signOut);
 
       document.querySelector("#disconnect-project").addEventListener("click", async () => {
         if (supabaseClient) {
@@ -1055,6 +1437,12 @@ with check ((select auth.uid()) = user_id);</pre>
         pollTimer = null;
         supabaseClient = null;
         cloudUser = null;
+        vaultKey = null;
+        vaultSalt = null;
+        vaultUserId = null;
+        pendingVaultData = null;
+        pendingSyncUserId = null;
+        cloudDirty = false;
         try {
           localStorage.removeItem(CONFIG_KEY);
           localStorage.removeItem(SYNCED_USER_KEY);
@@ -1118,7 +1506,9 @@ with check ((select auth.uid()) = user_id);</pre>
           input.focus();
           return;
         }
-        tasks.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, completed: false });
+        const task = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, completed: false, updatedAt: 0, changeId: "", deletedAt: null };
+        stampTask(task);
+        tasks.unshift(task);
         activeFilter = "all";
         saveTasks();
         render();
