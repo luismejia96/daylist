@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f4">
+  <title>Daylist — a little more done</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --page: #f7f7f4;
+      --surface: #fff;
+      --ink: #242621;
+      --muted: #898b83;
+      --line: #ecece7;
+      --accent: #6f8065;
+      --accent-dark: #53644b;
+      --soft: #f1f3ed;
+      --danger: #b45b52;
+      --shadow: 0 18px 55px rgb(34 38 29 / 7%), 0 2px 8px rgb(34 38 29 / 3%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #181a17;
+        --surface: #222520;
+        --ink: #eff0e9;
+        --muted: #a0a397;
+        --line: #343830;
+        --accent: #a5b79a;
+        --accent-dark: #d3e2c9;
+        --soft: #2b3028;
+        --danger: #e08b80;
+        --shadow: 0 18px 55px rgb(0 0 0 / 20%);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      padding: 72px 20px 48px;
+      background: var(--page);
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.5;
+      transition: background-color 220ms ease, color 220ms ease;
+    }
+
+    main {
+      width: min(100%, 480px);
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 13px;
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 21px;
+      height: 21px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--accent);
+      color: var(--surface);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 8vw, 38px);
+      font-weight: 630;
+      letter-spacing: -.055em;
+      line-height: 1.12;
+    }
+
+    .subtitle {
+      margin: 10px 0 28px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    form {
+      display: flex;
+      gap: 10px;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .task-input {
+      width: 100%;
+      min-width: 0;
+      height: 46px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      outline: none;
+      background: var(--page);
+      color: var(--ink);
+      font: inherit;
+      transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .task-input::placeholder { color: var(--muted); opacity: .8; }
+    .task-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    button { font: inherit; }
+
+    .add-button {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-width: 91px;
+      height: 46px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 11px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 620;
+      transition: background 160ms ease, transform 160ms ease;
+    }
+
+    .add-button:hover { background: var(--accent-dark); }
+    .add-button:active { transform: scale(.97); }
+
+    .list-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 17px 19px 9px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .task-count {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--accent-dark);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .task-list {
+      margin: 0;
+      padding: 0 8px 8px;
+      list-style: none;
+    }
+
+    .task-row {
+      display: flex;
+      min-height: 58px;
+      align-items: center;
+      gap: 12px;
+      padding: 0 10px;
+      border-radius: 11px;
+      animation: arrive 260ms cubic-bezier(.2,.8,.2,1) both;
+      transition: background-color 180ms ease, opacity 240ms ease, transform 240ms ease;
+    }
+
+    .task-row:hover { background: color-mix(in srgb, var(--soft) 64%, transparent); }
+    .task-row + .task-row { border-top: 1px solid var(--line); }
+    .task-row:hover + .task-row { border-top-color: transparent; }
+    .task-row.removing { opacity: 0; transform: translateX(12px); }
+
+    .check-wrap {
+      position: relative;
+      display: grid;
+      flex: 0 0 21px;
+      width: 21px;
+      height: 21px;
+      place-items: center;
+    }
+
+    .check-input {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      cursor: pointer;
+      opacity: 0;
+    }
+
+    .check-ui {
+      display: grid;
+      width: 21px;
+      height: 21px;
+      place-items: center;
+      border: 1.5px solid #c9ccc2;
+      border-radius: 7px;
+      background: transparent;
+      color: #fff;
+      transition: background 220ms ease, border-color 220ms ease, transform 220ms cubic-bezier(.2,.8,.2,1);
+    }
+
+    .check-input:hover + .check-ui { border-color: var(--accent); }
+    .check-input:focus-visible + .check-ui { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
+    .check-input:checked + .check-ui {
+      transform: scale(1.06);
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .check-ui svg {
+      width: 13px;
+      height: 13px;
+      transform: scale(.4);
+      opacity: 0;
+      transition: transform 190ms cubic-bezier(.2,.8,.2,1), opacity 150ms ease;
+    }
+
+    .check-input:checked + .check-ui svg { transform: scale(1); opacity: 1; }
+
+    .task-text {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 15px;
+      transition: color 220ms ease;
+    }
+
+    .task-row.completed .task-text { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+    .delete-button {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      place-items: center;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      opacity: 0;
+      transition: background 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease;
+    }
+
+    .task-row:hover .delete-button,
+    .delete-button:focus-visible { opacity: 1; }
+    .delete-button:hover { transform: scale(1.06); background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+    .delete-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .delete-button svg { width: 17px; height: 17px; }
+
+    .empty-state {
+      display: none;
+      padding: 28px 20px 32px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .empty-state.visible { display: block; animation: arrive 240ms ease both; }
+    .empty-icon { margin-bottom: 7px; color: var(--accent); font-size: 23px; }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 19px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .footer strong { color: var(--ink); font-weight: 600; }
+    .tip { margin: 18px 4px 0; color: var(--muted); font-size: 12px; text-align: center; }
+
+    .sync-card {
+      margin-top: 14px;
+      padding: 17px 18px;
+      border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+      border-radius: 15px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .sync-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .sync-state {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .sync-copy {
+      margin: 7px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .sync-card form {
+      display: grid;
+      gap: 9px;
+      padding: 0;
+      border: 0;
+    }
+
+    .sync-card input {
+      width: 100%;
+      min-width: 0;
+      height: 40px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      outline: none;
+      background: var(--page);
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .sync-card input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .sync-button {
+      min-height: 39px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--soft);
+      color: var(--accent-dark);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 620;
+      transition: background 160ms ease, opacity 160ms ease;
+    }
+
+    .sync-button:hover { background: color-mix(in srgb, var(--accent) 18%, var(--soft)); }
+    .sync-button:disabled { cursor: wait; opacity: .65; }
+    .sync-error { color: var(--danger); }
+
+    .sync-details {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+
+    .sync-details summary {
+      color: var(--accent-dark);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .sync-details pre {
+      overflow-x: auto;
+      max-height: 210px;
+      margin: 10px 0;
+      padding: 11px;
+      border-radius: 8px;
+      background: var(--page);
+      color: var(--ink);
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+
+    .sync-details .sync-button { width: 100%; }
+    .account-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .account-email { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+
+    @keyframes arrive {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 420px) {
+      body { padding: 48px 15px 32px; }
+      .task-row { min-height: 56px; }
+      .delete-button { opacity: .72; }
+      .footer { font-size: 11px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow"><span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none"><path d="m3.3 8.2 3 3.1 6.5-6.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span> Daylist</p>
+      <h1>A little more done.</h1>
+      <p class="subtitle">Make space for what matters today.</p>
+    </header>
+
+    <section class="card" aria-label="Your tasks">
+      <form id="task-form">
+        <label for="new-task" class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Add a task</label>
+        <input id="new-task" class="task-input" type="text" maxlength="160" placeholder="What needs doing?" autocomplete="off">
+        <button class="add-button" type="submit">
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none"><path d="M8 3.3v9.4M3.3 8h9.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Add task
+        </button>
+      </form>
+
+      <div class="list-heading">
+        <span>Today</span>
+        <span class="task-count" id="task-count">0 tasks left</span>
+      </div>
+      <ul class="task-list" id="task-list" aria-label="Task list"></ul>
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon" aria-hidden="true">✳</div>
+        <div>Nothing on your list. Enjoy the breathing room.</div>
+      </div>
+      <footer class="footer">
+        <span id="completion-summary"><strong>0 done</strong> so far</span>
+        <span>Saved on this device</span>
+      </footer>
+    </section>
+    <p class="tip">One thing at a time. You’ve got this.</p>
+
+    <section class="sync-card" aria-label="Cloud sync">
+      <div class="sync-heading">
+        <span>Cloud sync</span>
+        <span class="sync-state" id="sync-state" role="status" aria-live="polite">Local only</span>
+      </div>
+      <div id="setup-view">
+        <p class="sync-copy">Set up Supabase once, then use the same project on each device. Your task list stays private to your account. Cloud sign-in needs this page on an HTTPS website; this local preview remains device-only.</p>
+        <form id="config-form">
+          <input id="project-url" type="url" placeholder="Supabase project URL" aria-label="Supabase project URL" required>
+          <input id="publishable-key" type="password" placeholder="Publishable (anon) key" aria-label="Supabase publishable key" required autocomplete="off">
+          <button class="sync-button" type="submit">Connect Supabase</button>
+        </form>
+        <details class="sync-details">
+          <summary>Database setup (one-time)</summary>
+          <p class="sync-copy">In your Supabase project, open SQL Editor and run this once. Row-level security keeps each account’s list private.</p>
+          <pre id="schema-sql">create table if not exists public.daylist_lists (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  tasks jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.daylist_lists enable row level security;
+
+drop policy if exists "Users manage own Daylist" on public.daylist_lists;
+create policy "Users manage own Daylist"
+on public.daylist_lists for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);</pre>
+          <button class="sync-button" id="copy-schema" type="button">Copy SQL</button>
+        </details>
+      </div>
+      <div id="auth-view" hidden>
+        <p class="sync-copy">Sign in with an emailed link to sync your tasks across devices.</p>
+        <form id="email-form">
+          <input id="email-address" type="email" placeholder="you@example.com" aria-label="Email address" required autocomplete="email">
+          <button class="sync-button" id="send-link" type="submit">Email me a sign-in link</button>
+          <button class="sync-button" id="disconnect-project" type="button">Change Supabase project</button>
+        </form>
+      </div>
+      <div id="account-view" hidden>
+        <div class="account-row">
+          <span class="account-email" id="account-email"></span>
+          <button class="sync-button" id="sign-out" type="button">Sign out</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = "daylist-tasks-v1";
+      const CONFIG_KEY = "daylist-supabase-config-v1";
+      const SYNCED_USER_KEY = "daylist-synced-user-v1";
+      const starterTasks = [
+        { id: "welcome-plan", text: "Plan the week ahead", completed: true },
+        { id: "welcome-walk", text: "Take a walk and get some fresh air", completed: false },
+        { id: "welcome-inbox", text: "Clear out a few emails", completed: false }
+      ];
+      const list = document.querySelector("#task-list");
+      const form = document.querySelector("#task-form");
+      const input = document.querySelector("#new-task");
+      const count = document.querySelector("#task-count");
+      const summary = document.querySelector("#completion-summary");
+      const emptyState = document.querySelector("#empty-state");
+      const syncState = document.querySelector("#sync-state");
+      const setupView = document.querySelector("#setup-view");
+      const authView = document.querySelector("#auth-view");
+      const accountView = document.querySelector("#account-view");
+      const configForm = document.querySelector("#config-form");
+      const projectUrlInput = document.querySelector("#project-url");
+      const publishableKeyInput = document.querySelector("#publishable-key");
+      const emailForm = document.querySelector("#email-form");
+      const emailInput = document.querySelector("#email-address");
+      const sendLinkButton = document.querySelector("#send-link");
+      let supabaseClient = null;
+      let cloudUser = null;
+      let cloudDirty = false;
+      let cloudWriteChain = Promise.resolve();
+      let remoteSyncing = false;
+      let syncingUserId = null;
+      let pollTimer = null;
+      let tasks = loadTasks();
+
+      function loadTasks() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved === null) return starterTasks.map(task => ({ ...task }));
+          const parsed = JSON.parse(saved);
+          if (!Array.isArray(parsed)) throw new Error("Saved tasks must be an array.");
+          return parsed.filter(task =>
+            task && typeof task.id === "string" &&
+            typeof task.text === "string" && typeof task.completed === "boolean"
+          );
+        } catch (error) {
+          console.error("Could not load Daylist tasks from localStorage.", error);
+          return starterTasks.map(task => ({ ...task }));
+        }
+      }
+
+      function saveTasks() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        } catch (error) {
+          console.error("Could not save Daylist tasks to localStorage.", error);
+        }
+        if (cloudUser && !remoteSyncing) queueCloudWrite();
+      }
+
+      function createTaskRow(task) {
+        const row = document.createElement("li");
+        row.className = `task-row${task.completed ? " completed" : ""}`;
+        row.dataset.id = task.id;
+
+        const checkWrap = document.createElement("span");
+        checkWrap.className = "check-wrap";
+        const checkbox = document.createElement("input");
+        checkbox.className = "check-input";
+        checkbox.type = "checkbox";
+        checkbox.checked = task.completed;
+        checkbox.setAttribute("aria-label", `Mark "${task.text}" ${task.completed ? "not done" : "done"}`);
+        const checkUi = document.createElement("span");
+        checkUi.className = "check-ui";
+        checkUi.setAttribute("aria-hidden", "true");
+        checkUi.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><path d="m3.2 8.2 3 3 6.6-6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        checkWrap.append(checkbox, checkUi);
+
+        const text = document.createElement("span");
+        text.className = "task-text";
+        text.textContent = task.text;
+
+        const remove = document.createElement("button");
+        remove.className = "delete-button";
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Delete "${task.text}"`);
+        remove.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 6h11M8 6V4.5h4V6m2.5 0-.6 9.5H6.1L5.5 6m2.8 2.5v4.5m3.4-4.5v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+        checkbox.addEventListener("change", () => {
+          task.completed = checkbox.checked;
+          row.classList.toggle("completed", task.completed);
+          checkbox.setAttribute("aria-label", `Mark "${task.text}" ${task.completed ? "not done" : "done"}`);
+          saveTasks();
+          updateSummary();
+        });
+
+        remove.addEventListener("click", () => {
+          row.classList.add("removing");
+          row.addEventListener("transitionend", event => {
+            if (event.propertyName !== "opacity") return;
+            tasks = tasks.filter(item => item.id !== task.id);
+            saveTasks();
+            render();
+          }, { once: true });
+        });
+
+        row.append(checkWrap, text, remove);
+        return row;
+      }
+
+      function updateSummary() {
+        const remaining = tasks.filter(task => !task.completed).length;
+        const completed = tasks.length - remaining;
+        count.textContent = `${remaining} ${remaining === 1 ? "task" : "tasks"} left`;
+        summary.innerHTML = `<strong>${completed} ${completed === 1 ? "done" : "done"}</strong> so far`;
+        emptyState.classList.toggle("visible", tasks.length === 0);
+      }
+
+      function render() {
+        list.replaceChildren(...tasks.map(createTaskRow));
+        updateSummary();
+      }
+
+      function setSyncStatus(message, isError = false) {
+        syncState.textContent = message;
+        syncState.classList.toggle("sync-error", isError);
+      }
+
+      function showSyncView() {
+        const configured = Boolean(supabaseClient);
+        setupView.hidden = configured;
+        authView.hidden = !configured || Boolean(cloudUser);
+        accountView.hidden = !cloudUser;
+        if (cloudUser) {
+          document.querySelector("#account-email").textContent = cloudUser.email || "Signed in";
+        }
+      }
+
+      function validCloudTasks(value) {
+        return Array.isArray(value) ? value.filter(task =>
+          task && typeof task.id === "string" &&
+          typeof task.text === "string" && typeof task.completed === "boolean"
+        ) : [];
+      }
+
+      async function writeCloudTasks(snapshot, userId = cloudUser && cloudUser.id) {
+        if (!supabaseClient || !userId) return;
+        const { error } = await supabaseClient
+          .from("daylist_lists")
+          .upsert({
+            user_id: userId,
+            tasks: snapshot,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id" });
+        if (error) throw error;
+      }
+
+      function queueCloudWrite() {
+        cloudDirty = true;
+        cloudWriteChain = cloudWriteChain.catch(() => {}).then(async () => {
+          if (!cloudUser) return;
+          const userId = cloudUser.id;
+          const snapshot = JSON.parse(JSON.stringify(tasks));
+          await writeCloudTasks(snapshot, userId);
+          if (cloudUser && cloudUser.id === userId && JSON.stringify(tasks) === JSON.stringify(snapshot)) {
+            cloudDirty = false;
+            try {
+              localStorage.setItem(SYNCED_USER_KEY, userId);
+            } catch (error) {
+              console.error("Could not save the Daylist sync marker.", error);
+            }
+            setSyncStatus("Synced");
+          }
+        }).catch(error => {
+          cloudDirty = true;
+          console.error("Could not sync Daylist tasks.", error);
+          setSyncStatus("Offline — saved on this device", true);
+        });
+        setSyncStatus("Syncing…");
+      }
+
+      async function syncFromCloud(isFirstSync = false) {
+        if (!cloudUser || !supabaseClient || cloudDirty) return;
+        setSyncStatus("Syncing…");
+        const userId = cloudUser.id;
+        const { data, error } = await supabaseClient
+          .from("daylist_lists")
+          .select("tasks")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (error) throw error;
+
+        if (!data) {
+          await writeCloudTasks(tasks, userId);
+          try {
+            localStorage.setItem(SYNCED_USER_KEY, userId);
+          } catch (storageError) {
+            console.error("Could not save the Daylist sync marker.", storageError);
+          }
+        } else {
+          const remoteTasks = validCloudTasks(data.tasks);
+          let nextTasks = remoteTasks;
+          let hasLocalChanges = false;
+
+          let syncedUserId = null;
+          try {
+            syncedUserId = localStorage.getItem(SYNCED_USER_KEY);
+          } catch (storageError) {
+            console.error("Could not read the Daylist sync marker.", storageError);
+          }
+
+          if (isFirstSync && syncedUserId !== userId) {
+            const merged = new Map(tasks.map(task => [task.id, task]));
+            for (const task of remoteTasks) merged.set(task.id, task);
+            nextTasks = [...merged.values()];
+            hasLocalChanges = nextTasks.length !== remoteTasks.length ||
+              nextTasks.some((task, index) => JSON.stringify(task) !== JSON.stringify(remoteTasks[index]));
+          }
+
+          remoteSyncing = true;
+          tasks = nextTasks;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          } catch (storageError) {
+            console.error("Could not save synced Daylist tasks locally.", storageError);
+          }
+          render();
+          remoteSyncing = false;
+          if (hasLocalChanges) await writeCloudTasks(tasks, userId);
+          try {
+            localStorage.setItem(SYNCED_USER_KEY, userId);
+          } catch (storageError) {
+            console.error("Could not save the Daylist sync marker.", storageError);
+          }
+        }
+        if (cloudUser && cloudUser.id === userId) setSyncStatus("Synced");
+      }
+
+      async function handleAuthSession(session) {
+        const previousUserId = cloudUser && cloudUser.id;
+        cloudUser = session && session.user ? session.user : null;
+        showSyncView();
+
+        if (!cloudUser) {
+          cloudDirty = false;
+          if (pollTimer) window.clearInterval(pollTimer);
+          pollTimer = null;
+          if (supabaseClient) setSyncStatus("Connected — sign in to sync");
+          return;
+        }
+
+        if (previousUserId === cloudUser.id && pollTimer) return;
+        if (previousUserId && previousUserId !== cloudUser.id) cloudDirty = false;
+        if (syncingUserId === cloudUser.id) return;
+        if (pollTimer) window.clearInterval(pollTimer);
+        const userId = cloudUser.id;
+        syncingUserId = userId;
+        try {
+          await syncFromCloud(true);
+          if (cloudUser && cloudUser.id === userId) {
+            pollTimer = window.setInterval(() => {
+              syncFromCloud().catch(error => {
+                console.error("Could not refresh synced Daylist tasks.", error);
+                setSyncStatus("Sync unavailable — retrying", true);
+              });
+            }, 30000);
+          }
+        } catch (error) {
+          console.error("Could not load synced Daylist tasks.", error);
+          setSyncStatus("Sync unavailable — check setup", true);
+        } finally {
+          if (syncingUserId === userId) syncingUserId = null;
+        }
+      }
+
+      async function connectSupabase(config) {
+        if (window.location.protocol !== "https:" &&
+            window.location.hostname !== "localhost" &&
+            window.location.hostname !== "127.0.0.1") {
+          throw new Error("Cloud sign-in requires the page to be hosted over HTTPS. Local tasks still work here.");
+        }
+        if (!window.supabase || typeof window.supabase.createClient !== "function") {
+          throw new Error("The Supabase client could not load. Check your internet connection and reload.");
+        }
+        supabaseClient = window.supabase.createClient(config.url, config.key, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        });
+        showSyncView();
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+          Promise.resolve().then(() => handleAuthSession(session)).catch(error => {
+            console.error("Could not update the Daylist sign-in state.", error);
+            setSyncStatus("Sign-in error", true);
+          });
+        });
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+        await handleAuthSession(data.session);
+        if (!data.session) setSyncStatus("Connected — sign in to sync");
+      }
+
+      configForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        const config = {
+          url: projectUrlInput.value.trim().replace(/\/+$/, ""),
+          key: publishableKeyInput.value.trim()
+        };
+        try {
+          const parsedUrl = new URL(config.url);
+          if (parsedUrl.protocol !== "https:") throw new Error("Use the HTTPS project URL from Supabase.");
+          localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+          setSyncStatus("Connecting…");
+          await connectSupabase(config);
+        } catch (error) {
+          supabaseClient = null;
+          showSyncView();
+          setSyncStatus(error.message || "Could not connect to Supabase.", true);
+        }
+      });
+
+      emailForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (!supabaseClient) return;
+        sendLinkButton.disabled = true;
+        setSyncStatus("Sending sign-in link…");
+        try {
+          const { error } = await supabaseClient.auth.signInWithOtp({
+            email: emailInput.value.trim(),
+            options: { emailRedirectTo: window.location.href.split("#")[0] }
+          });
+          if (error) throw error;
+          setSyncStatus("Check your email for the sign-in link");
+        } catch (error) {
+          console.error("Could not send the Daylist sign-in link.", error);
+          setSyncStatus(error.message || "Could not send the sign-in link.", true);
+        } finally {
+          sendLinkButton.disabled = false;
+        }
+      });
+
+      document.querySelector("#sign-out").addEventListener("click", async () => {
+        if (!supabaseClient) return;
+        try {
+          const { error } = await supabaseClient.auth.signOut();
+          if (error) throw error;
+          setSyncStatus("Signed out — tasks remain on this device");
+        } catch (error) {
+          console.error("Could not sign out of Daylist.", error);
+          setSyncStatus(error.message || "Could not sign out.", true);
+        }
+      });
+
+      document.querySelector("#disconnect-project").addEventListener("click", async () => {
+        if (supabaseClient) {
+          const { error } = await supabaseClient.auth.signOut();
+          if (error) console.error("Could not sign out before changing projects.", error);
+        }
+        if (pollTimer) window.clearInterval(pollTimer);
+        pollTimer = null;
+        supabaseClient = null;
+        cloudUser = null;
+        try {
+          localStorage.removeItem(CONFIG_KEY);
+          localStorage.removeItem(SYNCED_USER_KEY);
+        } catch (error) {
+          console.error("Could not clear the Daylist project configuration.", error);
+        }
+        showSyncView();
+        setSyncStatus("Local only");
+      });
+
+      document.querySelector("#copy-schema").addEventListener("click", async event => {
+        try {
+          await navigator.clipboard.writeText(document.querySelector("#schema-sql").textContent);
+          event.currentTarget.textContent = "Copied";
+          window.setTimeout(() => { event.currentTarget.textContent = "Copy SQL"; }, 1600);
+        } catch (error) {
+          console.error("Could not copy the Supabase SQL.", error);
+          setSyncStatus("Copy failed — select and copy the SQL manually", true);
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        if (!cloudUser) return;
+        if (cloudDirty) {
+          queueCloudWrite();
+          return;
+        }
+        syncFromCloud().catch(error => {
+          console.error("Could not refresh synced Daylist tasks.", error);
+          setSyncStatus("Sync unavailable — retrying", true);
+        });
+      });
+      window.addEventListener("online", () => {
+        if (cloudUser && cloudDirty) queueCloudWrite();
+      });
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) {
+          input.focus();
+          return;
+        }
+        tasks.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, completed: false });
+        saveTasks();
+        render();
+        input.value = "";
+        input.focus();
+      });
+
+      render();
+      showSyncView();
+      try {
+        const config = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
+        if (config && typeof config.url === "string" && typeof config.key === "string") {
+          projectUrlInput.value = config.url;
+          publishableKeyInput.value = config.key;
+          connectSupabase(config).catch(error => {
+            console.error("Could not connect to the saved Supabase project.", error);
+            supabaseClient = null;
+            showSyncView();
+            setSyncStatus(error.message || "Could not connect to Supabase.", true);
+          });
+        }
+      } catch (error) {
+        console.error("Could not load the saved Supabase configuration.", error);
+        setSyncStatus("Could not load sync settings", true);
+      }
+    })();
+  </script>
+</body>
+</html>
